@@ -1,0 +1,14 @@
+# dotenv environment variables file
+.env
+
+# Logs
+*.log
+logs/
+
+# Storage
+storage/
+uploads/
+profile_pictures/
+*.jpg
+*.png
+*.jpeg
