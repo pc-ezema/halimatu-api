@@ -26,9 +26,9 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # Include routers
-from app.routes import auth, user  # Fix: import user from routes, not models
-app.include_router(auth.router)
-app.include_router(user.router)  # Now this will work
+# from app.routes import auth, user  # Fix: import user from routes, not models
+# app.include_router(auth.router)
+# app.include_router(user.router)  # Now this will work
 
 # Create storage directory if it doesn't exist
 os.makedirs(settings.storage_path, exist_ok=True)
@@ -112,13 +112,13 @@ async def general_exception_handler(request, exc):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application starting up...")
-    # Create database tables
-    try:
-        logger.info("Creating database tables...")
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables created successfully")
-    except Exception as e:
-        logger.error(f"Error creating database tables: {e}")
+    # # Create database tables
+    # try:
+    #     logger.info("Creating database tables...")
+    #     Base.metadata.create_all(bind=engine)
+    #     logger.info("Database tables created successfully")
+    # except Exception as e:
+    #     logger.error(f"Error creating database tables: {e}")
 
 
 # Shutdown event
