@@ -1,10 +1,8 @@
 import sys
 import os
 
-# Add your app directory to path
-sys.path.insert(0, os.path.dirname(__file__))
+# Add the 'app' directory to Python path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
 
-from asgiref.wsgi import WsgiToAsgi
-from app.main import app  # your FastAPI app
-
-application = WsgiToAsgi(app)
+# Import your Flask app
+from main import app as application  # 'app' is your Flask instance
