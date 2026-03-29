@@ -1,12 +1,12 @@
 import sys
 import os
+from a2wsgi import ASGIMiddleware
 
 # Add project root to sys.path
-cwd = os.getcwd()
-sys.path.append(cwd)
-
-# Make sure Python uses the correct virtualenv (set in cPanel / Passenger settings)
-# No activate_this.py needed in Python 3.12
+sys.path.insert(0, os.path.dirname(__file__))
 
 # Import the FastAPI app
-from app.main import app as application
+from app.main import app
+
+# Wrap the FastAPI (ASGI) app with ASGIMiddleware to make it WSGI compatible
+application = ASGIMiddleware(app)
