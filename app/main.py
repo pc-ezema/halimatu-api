@@ -4,7 +4,6 @@ from fastapi.exceptions import RequestValidationError
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from app.config.limiter import limiter
-from app.routes import auth, user  # Fix: import user from routes, not models
 from app.core.logger import setup_logger
 from app.database.database import engine, Base
 import logging
@@ -35,6 +34,7 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # Include routers
+from app.routes import auth, user  # Fix: import user from routes, not models
 app.include_router(auth.router)
 app.include_router(user.router)  # Now this will work
 
