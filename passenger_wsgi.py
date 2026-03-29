@@ -1,8 +1,8 @@
 import sys
 import os
+from dotenv import load_dotenv
 
-# Add the 'app' directory to Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
 
-# Import your Flask app
-from main import app as application  # 'app' is your Flask instance
+from main import app as application
