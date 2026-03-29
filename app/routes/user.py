@@ -12,7 +12,7 @@ from app.models.user import User
 from app.config.limiter import limiter
 from app.config.settings import settings
 
-router = APIRouter(prefix="/user", tags=["User"])
+router = APIRouter(prefix="/api/user", tags=["User"])
 security = HTTPBearer()
 
 @router.get("/profile", response_model=UserProfileResponse)

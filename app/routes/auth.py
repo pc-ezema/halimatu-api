@@ -13,7 +13,7 @@ from app.models.refresh_token import RefreshToken
 from app.config.limiter import limiter
 from app.config.settings import settings
 
-router = APIRouter(prefix="/auth", tags=["Auth"])
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 security = HTTPBearer()
 
 @router.post("/register", response_model=MessageResponse)
