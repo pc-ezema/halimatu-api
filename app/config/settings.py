@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # Security
-    secret_key: str
+    secret_key: str = "super-secret-key-change-this"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 45
     refresh_token_expire_days: int = 1
@@ -22,19 +22,19 @@ class Settings(BaseSettings):
     lockout_duration_minutes: int = 30
 
     # Database
-    db_user: str = "root"
-    db_password: Optional[str] = None
+    db_user: str = "farmsglo_halimatu_user"
+    db_password: Optional[str] = "!ayr=BDP*F^,Ml!"
     db_host: str = "127.0.0.1"
     db_port: int = 3306
-    db_name: str = "halimatu"
-
+    db_name: str = "farmsglo_halimatu_database"
+    
     # SMTP
     smtp_mailer: str = "smtp"
-    smtp_username: str
-    smtp_password: str
-    mail_from: str
-    smtp_port: int = 2525
-    smtp_host: str = "sandbox.smtp.mailtrap.io"
+    smtp_username: str = "noreply@halimatu.farmsglobal.org"
+    smtp_password: str = "x9W7k1d&jr1.WB-r"
+    mail_from: str = "noreply@halimatu.farmsglobal.org"
+    smtp_port: int = 465
+    smtp_host: str = "halimatu.farmsglobal.org"
     smtp_encryption: str = "tls"
 
     # Storage - Use BASE_DIR here too for consistency
