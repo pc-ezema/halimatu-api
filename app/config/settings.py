@@ -23,11 +23,11 @@ class Settings(BaseSettings):
 
     # Database
     db_user: str = "farmsglo_halimatu_user"
-    db_password: Optional[str] = "!ayr=BDP*F^,Ml!"
+    db_password: Optional[str] = "L)9_.dE#k_.j9i*)"
     db_host: str = "127.0.0.1"
     db_port: int = 3306
     db_name: str = "farmsglo_halimatu_database"
-    
+
     # SMTP
     smtp_mailer: str = "smtp"
     smtp_username: str = "noreply@halimatu.farmsglobal.org"
