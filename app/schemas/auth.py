@@ -104,14 +104,6 @@ class ResetPasswordRequest(BaseModel):
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
-# Response Schemas
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user: UserResponse
-
 class UserResponse(BaseModel):
     id: int
     student_id: str
@@ -130,6 +122,14 @@ class UserResponse(BaseModel):
     
     class Config:
         from_attributes = True
+
+# Response Schemas
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserResponse
 
 class MessageResponse(BaseModel):
     message: str
