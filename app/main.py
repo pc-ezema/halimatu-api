@@ -15,14 +15,6 @@ from app.config.settings import settings
 # Setup logger
 logger = setup_logger()
 
-# Create database tables
-try:
-    logger.info("Creating database tables...")
-    Base.metadata.create_all(bind=engine)
-    logger.info("Database tables created successfully")
-except Exception as e:
-    logger.error(f"Error creating database tables: {e}")
-
 app = FastAPI(
     title="Halimatu",
     version="1.0.0",
@@ -120,6 +112,14 @@ async def general_exception_handler(request, exc):
 @app.on_event("startup")
 async def startup_event():
     logger.info("Application starting up...")
+    # Create database tables
+    try:
+        logger.info("Creating database tables...")
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Error creating database tables: {e}")
+
 
 # Shutdown event
 @app.on_event("shutdown")
