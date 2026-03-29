@@ -1,7 +1,12 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 from typing import Optional
 import os
+
+# 1. Define the base directory (the 'halimatu' folder)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ENV_FILE = BASE_DIR / ".env"
 
 class Settings(BaseSettings):
     # Application
@@ -13,7 +18,7 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 45
     refresh_token_expire_days: int = 1
-    max_login_attempts: int = 5  # Add this field
+    max_login_attempts: int = 5 
     lockout_duration_minutes: int = 30
 
     # Database
@@ -32,8 +37,16 @@ class Settings(BaseSettings):
     smtp_host: str = "sandbox.smtp.mailtrap.io"
     smtp_encryption: str = "tls"
 
-    # Storage
-    storage_path: str = os.path.join(os.getcwd(), "storage")
+    # Storage - Use BASE_DIR here too for consistency
+    storage_path: str = str(BASE_DIR / "storage")
+
+    # 2. Modern Pydantic V2 Configuration
+    model_config = SettingsConfigDict(
+        env_file=str(ENV_FILE),
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore"
+    )
 
     @property
     def database_url(self) -> str:
@@ -44,16 +57,9 @@ class Settings(BaseSettings):
             f"{password}@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False  # This allows case-insensitive matching
-
-
 @lru_cache
 def get_settings():
     """Cache settings for performance"""
     return Settings()
-
 
 settings = get_settings()
