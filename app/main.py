@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.errors import RateLimitExceeded
 from app.config.limiter import limiter
@@ -19,6 +20,14 @@ app = FastAPI(
     title="Halimatu",
     version="1.0.0",
     description="Learning Management System"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or restrict this in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Attach limiter to app and add middleware
