@@ -8,7 +8,6 @@ from app.database.database import get_db
 from app.schemas.user import *
 from app.services.user_service import UserService
 from app.services.auth_service import get_current_user
-from app.models.user import User
 from app.config.limiter import limiter
 from app.config.settings import settings
 

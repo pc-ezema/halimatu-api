@@ -7,11 +7,16 @@ from slowapi.errors import RateLimitExceeded
 from app.config.limiter import limiter
 from app.core.logger import setup_logger
 from app.database.database import engine, Base
-import logging
+from app.routes import auth, user, admin
 # Serve static files for profile pictures
 from fastapi.staticfiles import StaticFiles
 import os
 from app.config.settings import settings
+from app.models.permission import Permission
+from app.models.role import Role
+# from app.schemas import admin
+from app.utils.permission_generator import PermissionGenerator
+from app.utils.route_collector import RouteCollector
 
 # Setup logger
 logger = setup_logger()
@@ -35,9 +40,9 @@ app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
 
 # Include routers
-from app.routes import auth, user  # Fix: import user from routes, not models
 app.include_router(auth.router)
-app.include_router(user.router)  # Now this will work
+app.include_router(user.router) 
+app.include_router(admin.router)
 
 # Create storage directory if it doesn't exist
 os.makedirs(settings.storage_path, exist_ok=True)
@@ -129,6 +134,49 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
 
+    from app.database.database import SessionLocal
+    db = SessionLocal()
+    
+    try:
+        # Step 1: Sync permissions from routes
+        result = PermissionGenerator.sync_permissions(db, app)
+        
+        logger.info(f"Permissions synced: Created {len(result['created'])}, "
+                   f"Existing {len(result['existing'])}, "
+                   f"Total {result['total']}")
+        
+        # Step 2: Get superadmin role
+        superadmin_role = db.query(Role).filter(Role.name == "superadmin").first()
+        
+        if superadmin_role:
+            # Step 3: Get all permissions
+            all_permissions = db.query(Permission).all()
+            
+            # Step 4: Assign ALL permissions to superadmin role
+            if all_permissions:
+                # Check if already assigned
+                current_perms = set(p.id for p in superadmin_role.permissions)
+                new_perms = [p for p in all_permissions if p.id not in current_perms]
+                
+                if new_perms:
+                    superadmin_role.permissions.extend(new_perms)
+                    db.commit()
+                    logger.info(f"✅ Assigned {len(new_perms)} new permissions to superadmin role")
+                else:
+                    logger.info(f"✅ Superadmin already has all {len(all_permissions)} permissions")
+            else:
+                logger.warning("No permissions found to assign")
+        else:
+            logger.warning("Superadmin role not found. Please run seed_admin.py first.")
+        
+        # Print route permissions in debug mode
+        if settings.debug:
+            RouteCollector.print_route_permissions(app)
+        
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+    finally:
+        db.close()
 
 # Shutdown event
 @app.on_event("shutdown")

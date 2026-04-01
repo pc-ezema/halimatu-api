@@ -60,8 +60,6 @@ def verify_otp_endpoint(
             raise HTTPException(status_code=400, detail="Invalid or expired OTP")
         
         # Activate user
-        user.is_active = True
-        user.is_verified = True
         user.email_verified_at = datetime.utcnow()
         user.status = "active"
         db.commit()
