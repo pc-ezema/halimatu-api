@@ -150,3 +150,27 @@ class UserStatsResponse(BaseModel):
     active: int
     inactive: int
     verified: int
+
+class AdminDashboardStatsResponse(BaseModel):
+    """Complete admin dashboard statistics"""
+    # User stats
+    total_users: int
+    active_users: int
+    inactive_users: int
+    verified_users: int
+    
+    # Subscription stats
+    total_subscriptions: int
+    active_subscriptions: int
+    expired_subscriptions: int
+    cancelled_subscriptions: int
+    
+    # Revenue stats
+    total_revenue: float
+    monthly_recurring_revenue: float
+    
+    # Plans breakdown
+    plans_breakdown: List[dict]
+    
+    class Config:
+        from_attributes = True

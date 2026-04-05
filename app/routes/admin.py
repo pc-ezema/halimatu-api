@@ -5,11 +5,22 @@ from typing import List
 
 from app.database.database import get_db
 from app.schemas.admin import *
+from app.schemas.subscription import *
 from app.services.admin_service import RoleService, PermissionService, AdminUserService
 from app.services.admin_auth_service import authenticate_admin, create_admin_token, get_current_admin, check_permission
 from app.config.limiter import limiter
 from app.decorators.permissions import admin_route
 from app.models.admin import Admin
+
+# Add these imports at the top
+from app.schemas.subscription import (
+    PlanCreate, PlanUpdate, PlanResponse,
+    SubscriptionResponse, UserStatsResponse
+)
+from app.services.subscription_service import SubscriptionService
+from app.models.plan import Plan
+from app.models.subscription import Subscription
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
@@ -31,6 +42,47 @@ def require_permission(permission_name: str):
         return admin
     return permission_dependency
 
+# ==================== ADMIN DASHBOARD & STATS ====================
+@router.get("/dashboard/stats")
+@admin_route("dashboard_view")
+def get_admin_dashboard_stats(
+    request: Request,
+    admin: Admin = Depends(require_permission("dashboard_view")),
+    db: Session = Depends(get_db),
+):
+    """Get complete admin dashboard statistics"""
+    try:
+        from app.services.subscription_service import SubscriptionService
+        
+        # User stats
+        user_stats = AdminUserService.get_user_stats(db)
+        
+        # Subscription stats
+        subscription_stats = SubscriptionService.get_subscription_stats(db)
+        
+        # Combine all stats
+        return {
+            "users": {
+                "total": user_stats["total"],
+                "active": user_stats["active"],
+                "inactive": user_stats["inactive"],
+                "verified": user_stats["verified"]
+            },
+            "subscriptions": {
+                "total": subscription_stats["total_subscriptions"],
+                "active": subscription_stats["active_subscriptions"],
+                "expired": subscription_stats["expired_subscriptions"],
+                "cancelled": subscription_stats["cancelled_subscriptions"]
+            },
+            "revenue": {
+                "total": subscription_stats["total_revenue"],
+                "mrr": subscription_stats["monthly_recurring_revenue"]
+            },
+            "plans_breakdown": subscription_stats["plans_breakdown"]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
 # ==================== ADMIN AUTHENTICATION ====================
 @router.post("/login", response_model=AdminTokenResponse)
 @limiter.limit("10/minute")
@@ -558,5 +610,292 @@ def delete_user(
         return MessageResponse(message=result["message"])
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== PLAN MANAGEMENT ====================
+@router.post("/plans", response_model=PlanResponse)
+@admin_route("plans_create")
+def create_plan(
+    request: Request,
+    data: PlanCreate,
+    admin: Admin = Depends(require_permission("plans_create")),
+    db: Session = Depends(get_db),
+):
+    """Create a new subscription plan (Admin only)"""
+    try:
+        # Check if plan type already exists
+        existing = db.query(Plan).filter(Plan.type == data.type).first()
+        if existing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Plan with type '{data.type}' already exists"
+            )
+        
+        plan = SubscriptionService.create_plan(db, data.model_dump())
+        return plan
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/plans", response_model=List[PlanResponse])
+@admin_route("plans")
+def admin_get_plans(
+    request: Request,
+    include_inactive: bool = False,
+    admin: Admin = Depends(require_permission("plans")),
+    db: Session = Depends(get_db),
+):
+    """Get all subscription plans (Admin only)"""
+    try:
+        query = db.query(Plan)
+        if not include_inactive:
+            query = query.filter(Plan.status == "active")
+        plans = query.order_by(Plan.sort_order).all()
+        return plans
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/plans/{plan_id}", response_model=PlanResponse)
+@admin_route("plans_view")
+def admin_get_plan(
+    request: Request,
+    plan_id: int,
+    admin: Admin = Depends(require_permission("plans_view")),
+    db: Session = Depends(get_db),
+):
+    """Get a specific plan by ID (Admin only)"""
+    try:
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        return plan
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/plans/{plan_id}", response_model=PlanResponse)
+@admin_route("plans_update")
+def admin_update_plan(
+    request: Request,
+    plan_id: int,
+    data: PlanUpdate,
+    admin: Admin = Depends(require_permission("plans_update")),
+    db: Session = Depends(get_db),
+):
+    """Update a subscription plan (Admin only)"""
+    try:
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        
+        # Update only provided fields
+        update_data = data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(plan, key, value)
+        
+        plan.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(plan)
+        
+        return plan
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/plans/{plan_id}", response_model=MessageResponse)
+@admin_route("plans_delete")
+def admin_delete_plan(
+    request: Request,
+    plan_id: int,
+    admin: Admin = Depends(require_permission("plans_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete (deactivate) a subscription plan (Admin only)"""
+    try:
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+        
+        # Check if plan has active subscriptions
+        active_subs = db.query(Subscription).filter(
+            Subscription.plan_id == plan_id,
+            Subscription.status == "active",
+            Subscription.end_date > datetime.utcnow()
+        ).first()
+        
+        if active_subs:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete plan with active subscriptions. Deactivate it instead."
+            )
+        
+        # Soft delete - deactivate
+        plan.status = "inactive"
+        db.commit()
+        
+        return MessageResponse(message=f"Plan '{plan.name}' deactivated successfully")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== SUBSCRIPTION MANAGEMENT (Admin) ====================
+@router.get("/subscriptions", response_model=List[SubscriptionResponse])
+@admin_route("subscriptions")
+def admin_get_subscriptions(
+    request: Request,
+    skip: int = 0,
+    limit: int = 100,
+    status_filter: str = None,
+    admin: Admin = Depends(require_permission("subscriptions")),
+    db: Session = Depends(get_db),
+):
+    """Get all user subscriptions (Admin only)"""
+    try:
+        query = db.query(Subscription)
+        
+        if status_filter:
+            query = query.filter(Subscription.status == status_filter)
+        
+        subscriptions = query.order_by(Subscription.created_at.desc()).offset(skip).limit(limit).all()
+        return subscriptions
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/subscriptions/stats")
+@admin_route("subscriptions_stats")
+def admin_get_subscription_stats(
+    request: Request,
+    admin: Admin = Depends(require_permission("subscriptions_stats")),
+    db: Session = Depends(get_db),
+):
+    """Get subscription statistics (Admin only)"""
+    try:
+        from sqlalchemy import func
+        
+        now = datetime.utcnow()
+        
+        # Total subscriptions
+        total_subscriptions = db.query(Subscription).count()
+        
+        # Active subscriptions
+        active_subscriptions = db.query(Subscription).filter(
+            Subscription.status == "active",
+            Subscription.end_date > now
+        ).count()
+        
+        # Expired subscriptions
+        expired_subscriptions = db.query(Subscription).filter(
+            Subscription.status == "expired"
+        ).count()
+        
+        # Cancelled subscriptions
+        cancelled_subscriptions = db.query(Subscription).filter(
+            Subscription.status == "cancelled"
+        ).count()
+        
+        # Total revenue
+        total_revenue = db.query(func.sum(Subscription.amount_paid)).filter(
+            Subscription.status == "active"
+        ).scalar() or 0
+        
+        # Monthly recurring revenue (MRR)
+        mrr = db.query(func.sum(Subscription.amount_paid)).filter(
+            Subscription.status == "active",
+            Subscription.end_date > now,
+            Subscription.plan.has(type="monthly")
+        ).scalar() or 0
+        
+        # Subscriptions by plan
+        plans_stats = db.query(
+            Plan.name,
+            Plan.type,
+            func.count(Subscription.id).label('count')
+        ).outerjoin(Subscription, Plan.id == Subscription.plan_id).filter(
+            Subscription.status == "active",
+            Subscription.end_date > now
+        ).group_by(Plan.id).all()
+        
+        return {
+            "total_subscriptions": total_subscriptions,
+            "active_subscriptions": active_subscriptions,
+            "expired_subscriptions": expired_subscriptions,
+            "cancelled_subscriptions": cancelled_subscriptions,
+            "total_revenue": total_revenue,
+            "monthly_recurring_revenue": mrr,
+            "plans_breakdown": [
+                {"name": p.name, "type": p.type, "count": p.count}
+                for p in plans_stats
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/subscriptions/{subscription_id}", response_model=SubscriptionResponse)
+@admin_route("subscriptions_view")
+def admin_get_subscription(
+    request: Request,
+    subscription_id: int,
+    admin: Admin = Depends(require_permission("subscriptions_view")),
+    db: Session = Depends(get_db),
+):
+    """Get a specific subscription by ID (Admin only)"""
+    try:
+        subscription = db.query(Subscription).filter(Subscription.id == subscription_id).first()
+        if not subscription:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        return subscription
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/subscriptions/{subscription_id}/cancel", response_model=MessageResponse)
+@admin_route("subscriptions_update")
+def admin_cancel_subscription(
+    request: Request,
+    subscription_id: int,
+    admin: Admin = Depends(require_permission("subscriptions_update")),
+    db: Session = Depends(get_db),
+):
+    """Cancel a user's subscription (Admin only)"""
+    try:
+        subscription = db.query(Subscription).filter(Subscription.id == subscription_id).first()
+        if not subscription:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subscription not found")
+        
+        subscription.status = "cancelled"
+        subscription.cancelled_at = datetime.utcnow()
+        db.commit()
+        
+        return MessageResponse(message=f"Subscription {subscription.subscription_id} cancelled successfully")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== USER SUBSCRIPTION MANAGEMENT (Admin) ====================
+@router.get("/users/{user_id}/subscriptions", response_model=List[SubscriptionResponse])
+@admin_route("users_view_subscriptions")
+def admin_get_user_subscriptions(
+    request: Request,
+    user_id: int,
+    admin: Admin = Depends(require_permission("users_view_subscriptions")),
+    db: Session = Depends(get_db),
+):
+    """Get all subscriptions for a specific user (Admin only)"""
+    try:
+        subscriptions = db.query(Subscription).filter(
+            Subscription.user_id == user_id
+        ).order_by(Subscription.created_at.desc()).all()
+        
+        return subscriptions
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

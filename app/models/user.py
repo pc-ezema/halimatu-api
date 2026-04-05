@@ -4,6 +4,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Enum, T
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database.database import Base
+
 import enum
 
 class GenderEnum(str, enum.Enum):
@@ -71,6 +72,8 @@ class User(Base):
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     otps = relationship("OTP", back_populates="user", cascade="all, delete-orphan")
+    subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
 
     def get_full_name(self):
         """Return the user's full name"""
@@ -92,3 +95,28 @@ class User(Base):
         if self.locked_until and self.locked_until > datetime.utcnow():
             return True
         return False
+    
+    # Add these methods to User class
+    def has_active_subscription(self) -> bool:
+        """Check if user has an active subscription"""
+        from datetime import datetime
+        from app.models.subscription import SubscriptionStatus
+        
+        for sub in self.subscriptions:
+            if sub.status == SubscriptionStatus.ACTIVE and sub.end_date > datetime.utcnow():
+                return True
+        return False
+
+    def get_active_subscription(self):
+        """Get user's active subscription"""
+        from datetime import datetime
+        from app.models.subscription import SubscriptionStatus
+        
+        for sub in self.subscriptions:
+            if sub.status == SubscriptionStatus.ACTIVE and sub.end_date > datetime.utcnow():
+                return sub
+        return None
+
+    def get_total_spent(self) -> float:
+        """Get total amount user has spent"""
+        return sum(payment.amount for payment in self.payments if payment.status == "completed")

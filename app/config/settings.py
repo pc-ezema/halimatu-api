@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     # Storage - Use BASE_DIR here too for consistency
     storage_path: str = str(BASE_DIR / "storage")
 
+    # Add to Settings class
+    flutterwave_public_key: str
+    flutterwave_secret_key: str
+    flutterwave_encryption_key: str
+    flutterwave_webhook_secret: str
+    flutterwave_production: bool = False  # False for sandbox, True for production
+    frontend_url: str = "http://localhost:3000"
+
     # 2. Modern Pydantic V2 Configuration
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),

@@ -235,6 +235,7 @@ def refresh_access_token(db: Session, refresh_token: str) -> Dict:
         raise ValueError("Refresh token has expired")
     except Exception as e:
         raise ValueError(f"Invalid refresh token: {str(e)}")
+    
 def get_current_user(db: Session, token: str) -> User:
     """Get current user from access token"""
     try:
@@ -262,7 +263,7 @@ def get_current_user(db: Session, token: str) -> User:
         
         return user
         
-    except jwt.PyJWTError:
+    except jwt.JWTError:
         raise ValueError("Invalid access token")
 
 def revoke_all_user_tokens(db: Session, user_id: int):

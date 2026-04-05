@@ -7,7 +7,7 @@ from app.database.database import get_db
 from app.schemas.auth import *
 from app.services.auth_service import *
 from app.services.otp_service import generate_otp, verify_otp
-from app.services.email_service import send_otp_email, send_password_reset_email
+from app.services.email_service import send_otp_email, send_password_reset_with_otp
 from app.models.user import User
 from app.models.refresh_token import RefreshToken
 from app.config.limiter import limiter
@@ -112,7 +112,7 @@ def resend_otp(
         if data.purpose == "email_verification":
             background_tasks.add_task(send_otp_email, user.email, otp_code)
         elif data.purpose == "password_reset":
-            background_tasks.add_task(send_password_reset_email, user.email, otp_code)
+            background_tasks.add_task(send_password_reset_with_otp, user.email, otp_code)
         
         return {"message": "OTP sent successfully"}
         
@@ -143,7 +143,7 @@ def forgot_password(
         otp_code = generate_otp(db, user.id, "password_reset")
         
         # Send OTP
-        background_tasks.add_task(send_password_reset_email, user.email, otp_code)
+        background_tasks.add_task(send_password_reset_with_otp, user.email, otp_code)
         
         return {"message": "If email exists, OTP will be sent"}
         

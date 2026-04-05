@@ -62,6 +62,7 @@ class UserProfileResponse(BaseModel):
     country: Optional[str]
     profile_picture: Optional[str]
     email_verified_at: Optional[datetime]
+    status: str
     created_at: datetime
     
     class Config:

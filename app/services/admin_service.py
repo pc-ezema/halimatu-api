@@ -1,6 +1,7 @@
 from datetime import datetime
 from operator import or_
 from typing import List, Optional, Dict
+from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
 from app.models.admin import Admin
 from app.models.role import Role
@@ -8,6 +9,7 @@ from app.models.permission import Permission
 from app.services.admin_auth_service import hash_password
 from app.models.user import User
 from app.utils.password_generator import PasswordGenerator
+from app.services.email_service import send_new_password_email
 
 class RoleService:
     """Service for role management"""
@@ -305,9 +307,8 @@ class AdminUserService:
         db.commit()
         
         # Send email with new password
-        # You'll need to implement email sending
-        # send_password_reset_email(user.email, new_password)
-        
+        BackgroundTasks.add_task(send_new_password_email, user.email, new_password, user.get_full_name())
+
         return {
             "message": f"Password reset successfully for {user.email}",
             "new_password": new_password  # Remove this in production
