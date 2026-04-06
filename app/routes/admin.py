@@ -15,7 +15,7 @@ from app.models.admin import Admin
 # Add these imports at the top
 from app.schemas.subscription import (
     PlanCreate, PlanUpdate, PlanResponse,
-    SubscriptionResponse, UserStatsResponse
+    SubscriptionResponse
 )
 from app.services.subscription_service import SubscriptionService
 from app.models.plan import Plan

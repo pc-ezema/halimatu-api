@@ -80,20 +80,6 @@ class PaymentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-# User Stats Response (Add this missing class)
-class UserStatsResponse(BaseModel):
-    total_users: int
-    active_users: int
-    inactive_users: int
-    verified_users: int
-    total_subscriptions: int
-    active_subscriptions: int
-    total_revenue: float
-    
-    class Config:
-        from_attributes = True
-
-
 class MessageResponse(BaseModel):
     message: str
 
