@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import List
@@ -21,6 +21,14 @@ from app.services.subscription_service import SubscriptionService
 from app.models.plan import Plan
 from app.models.subscription import Subscription
 from datetime import datetime, timedelta
+
+from app.schemas.course import (
+    CourseCreate, CourseStatus, CourseUpdate, CourseResponse, CourseDetailResponse,
+    TopicCreate, TopicUpdate, TopicResponse,
+    ClassCreate, ClassUpdate, ClassResponse,
+    MessageResponse
+)
+from app.services.course_service import CourseService
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
@@ -897,5 +905,300 @@ def admin_get_user_subscriptions(
         ).order_by(Subscription.created_at.desc()).all()
         
         return subscriptions
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ==================== COURSE MANAGEMENT ====================
+
+@router.post("/courses", response_model=CourseResponse)
+@admin_route("courses_create")
+async def create_course(
+    request: Request,
+    title: str = Form(...),
+    description: str = Form(None),
+    price: int = Form(0),
+    image: UploadFile = File(None),
+    instructor: str = Form(None),
+    duration_months: int = Form(None),
+    admin: Admin = Depends(require_permission("courses_create")),
+    db: Session = Depends(get_db),
+):
+    """Create a new course with image upload"""
+    try:
+        course_data = {
+            "title": title,
+            "description": description,
+            "price": price,
+            "instructor": instructor,
+            "duration_months": duration_months
+        }
+        course = CourseService.create_course(db, course_data, image)
+        return course
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses", response_model=List[CourseResponse])
+@admin_route("courses")
+def get_all_courses(
+    request: Request,
+    skip: int = 0,
+    limit: int = 100,
+    status: str = None,
+    admin: Admin = Depends(require_permission("courses")),
+    db: Session = Depends(get_db),
+):
+    """Get all courses"""
+    try:
+        courses = CourseService.get_courses(db, skip, limit, status)
+        
+        # Add stats to each course
+        result = []
+        for course in courses:
+            stats = CourseService.get_course_stats(db, course.id)
+            result.append({
+                "id": course.id,
+                "title": course.title,
+                "description": course.description,
+                "price": course.price,
+                "status": course.status,
+                "image": course.image,
+                "instructor": course.instructor,
+                "duration_months": course.duration_months,
+                "total_topics": len(course.topics),
+                "total_enrolled": stats["total_enrolled"],
+                "created_at": course.created_at,
+                "updated_at": course.updated_at
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}", response_model=CourseDetailResponse)
+@admin_route("courses_view")
+def get_course(
+    request: Request,
+    course_id: int,
+    admin: Admin = Depends(require_permission("courses_view")),
+    db: Session = Depends(get_db),
+):
+    """Get course details with topics"""
+    try:
+        course = CourseService.get_course(db, course_id)
+        topics = CourseService.get_topics(db, course_id)
+        stats = CourseService.get_course_stats(db, course_id)
+        
+        return {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "price": course.price,
+            "status": course.status,
+            "image": course.image,
+            "instructor": course.instructor,
+            "duration_months": course.duration_months,
+            "total_topics": len(topics),
+            "total_enrolled": stats["total_enrolled"],
+            "created_at": course.created_at,
+            "updated_at": course.updated_at,
+            "topics": topics
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/courses/{course_id}", response_model=CourseResponse)
+@admin_route("courses_update")
+async def update_course(
+    request: Request,
+    course_id: int,
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    price: Optional[int] = Form(None),
+    status: Optional[CourseStatus] = Form(None),
+    image: UploadFile = File(None),
+    instructor: Optional[str] = Form(None),
+    duration_months: Optional[int] = Form(None),
+    admin: Admin = Depends(require_permission("courses_update")),
+    db: Session = Depends(get_db),
+):
+    """Update a course with optional image upload"""
+    try:
+        course_data = {}
+        if title is not None:
+            course_data["title"] = title
+        if description is not None:
+            course_data["description"] = description
+        if price is not None:
+            course_data["price"] = price
+        if status is not None:
+            course_data["status"] = status
+        if instructor is not None:
+            course_data["instructor"] = instructor
+        if duration_months is not None:
+            course_data["duration_months"] = duration_months
+        
+        course = CourseService.update_course(db, course_id, course_data, image)
+        return course
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/courses/{course_id}", response_model=MessageResponse)
+@admin_route("courses_delete")
+def delete_course(
+    request: Request,
+    course_id: int,
+    admin: Admin = Depends(require_permission("courses_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a course"""
+    try:
+        result = CourseService.delete_course(db, course_id)
+        return MessageResponse(message=result["message"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== TOPIC MANAGEMENT ====================
+
+@router.post("/courses/{course_id}/topics", response_model=TopicResponse)
+@admin_route("topics_create")
+def create_topic(
+    request: Request,
+    course_id: int,
+    data: TopicCreate,
+    admin: Admin = Depends(require_permission("topics_create")),
+    db: Session = Depends(get_db),
+):
+    """Create a new topic for a course"""
+    try:
+        topic = CourseService.create_topic(db, course_id, data.title)
+        return topic
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}/topics", response_model=List[TopicResponse])
+@admin_route("course_topics")
+def get_course_topics(
+    request: Request,
+    course_id: int,
+    admin: Admin = Depends(require_permission("course_topics")),
+    db: Session = Depends(get_db),
+):
+    """Get all topics for a course"""
+    try:
+        topics = CourseService.get_topics(db, course_id)
+        return topics
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/topics/{topic_id}", response_model=TopicResponse)
+@admin_route("topics_update")
+def update_topic(
+    request: Request,
+    topic_id: int,
+    data: TopicUpdate,
+    admin: Admin = Depends(require_permission("topics_update")),
+    db: Session = Depends(get_db),
+):
+    """Update a topic"""
+    try:
+        topic = CourseService.update_topic(db, topic_id, data.title, data.order)
+        return topic
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/topics/{topic_id}", response_model=MessageResponse)
+@admin_route("topics_delete")
+def delete_topic(
+    request: Request,
+    topic_id: int,
+    admin: Admin = Depends(require_permission("topics_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a topic"""
+    try:
+        result = CourseService.delete_topic(db, topic_id)
+        return MessageResponse(message=result["message"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== CLASS MANAGEMENT ====================
+
+@router.post("/topics/{topic_id}/classes", response_model=ClassResponse)
+@admin_route("classes_create")
+def create_class(
+    request: Request,
+    topic_id: int,
+    data: ClassCreate,
+    admin: Admin = Depends(require_permission("classes_create")),
+    db: Session = Depends(get_db),
+):
+    """Create a new class for a topic"""
+    try:
+        class_obj = CourseService.create_class(db, topic_id, data.model_dump())
+        return class_obj
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/topics/{topic_id}/classes", response_model=List[ClassResponse])
+@admin_route("classes_view")
+def get_topic_classes(
+    request: Request,
+    topic_id: int,
+    admin: Admin = Depends(require_permission("classes_view")),
+    db: Session = Depends(get_db),
+):
+    """Get all classes for a topic"""
+    try:
+        classes = CourseService.get_classes(db, topic_id)
+        return classes
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/classes/{class_id}", response_model=ClassResponse)
+@admin_route("classes_update")
+def update_class(
+    request: Request,
+    class_id: int,
+    data: ClassUpdate,
+    admin: Admin = Depends(require_permission("classes_update")),
+    db: Session = Depends(get_db),
+):
+    """Update a class"""
+    try:
+        class_obj = CourseService.update_class(db, class_id, data.model_dump(exclude_unset=True))
+        return class_obj
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/classes/{class_id}", response_model=MessageResponse)
+@admin_route("classes_delete")
+def delete_class(
+    request: Request,
+    class_id: int,
+    admin: Admin = Depends(require_permission("classes_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a class"""
+    try:
+        result = CourseService.delete_class(db, class_id)
+        return MessageResponse(message=result["message"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

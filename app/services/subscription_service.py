@@ -10,6 +10,8 @@ from app.models.plan import Plan, PlanStatus, PlanType
 from app.models.subscription import Subscription, SubscriptionStatus
 from app.models.payment import Payment, PaymentStatus, PaymentMethod
 from app.services.flutterwave_service import flutterwave
+from app.models.enrollment import Enrollment, EnrollmentStatus
+from app.services.course_service import CourseService
 
 class SubscriptionService:
     
@@ -174,99 +176,215 @@ class SubscriptionService:
     @staticmethod
     def confirm_payment_and_activate_subscription(db: Session, tx_ref: str, user_id: int) -> Dict:
         """
-        Verify payment and activate subscription
+        Verify payment and activate subscription (idempotent & safe)
+        Also fetches all courses and enrolls the user
         """
-        # Get payment record
-        payment = db.query(Payment).filter(
-            Payment.transaction_id == tx_ref,
-            Payment.user_id == user_id
-        ).first()
-        
-        if not payment:
-            raise ValueError("Payment record not found")
-        
-        if payment.status == PaymentStatus.COMPLETED:
+
+        try:
+            # 🔒 Start transaction
+            # (SQLAlchemy uses implicit transaction, but we control commit/rollback)
+
+            # 1. Fetch payment
+            payment = db.query(Payment).filter(
+                Payment.transaction_id == tx_ref,
+                Payment.user_id == user_id
+            ).first()
+
+            if not payment:
+                raise ValueError("Payment record not found")
+
+            # 2. If already completed → check subscription
+            if payment.status == PaymentStatus.COMPLETED:
+                if payment.subscription_id:
+                    # Get subscription and courses
+                    subscription = db.query(Subscription).filter(Subscription.id == payment.subscription_id).first()
+                    courses = CourseService.get_courses(db, status="published")
+                    
+                    return {
+                        "status": "success",
+                        "message": "Payment already confirmed",
+                        "subscription_id": payment.subscription_id,
+                        "subscription": subscription,
+                        "available_courses": courses,
+                        "total_courses": len(courses)
+                    }
+                # ⚠️ If completed but no subscription → continue (recovery mode)
+
+            # 3. Verify payment with Flutterwave
+            verification = flutterwave.verify_payment(tx_ref)
+
+            if verification.get("status") != "success":
+                return {
+                    "status": "failed",
+                    "message": "Payment verification failed",
+                    "details": verification
+                }
+
+            # 4. Update payment
+            payment.status = PaymentStatus.COMPLETED
+            payment.paid_at = datetime.utcnow()
+            payment.payment_details = verification
+            payment.flutterwave_reference = verification.get("flw_ref")
+
+            # 5. Fetch plan
+            plan = db.query(Plan).filter(Plan.id == payment.plan_id).first()
+            if not plan:
+                raise ValueError("Plan not found")
+
+            # 6. Prevent duplicate subscription (CRITICAL)
+            existing_subscription = db.query(Subscription).filter(
+                Subscription.user_id == user_id,
+                Subscription.plan_id == plan.id,
+                Subscription.status == SubscriptionStatus.ACTIVE
+            ).first()
+
+            if existing_subscription:
+                # Link payment if not already linked
+                if not payment.subscription_id:
+                    payment.subscription_id = existing_subscription.id
+                    db.commit()
+
+                # Get courses for existing subscription
+                courses = CourseService.get_courses(db, status="published")
+                
+                return {
+                    "status": "success",
+                    "message": "Active subscription already exists",
+                    "subscription_id": existing_subscription.subscription_id,
+                    "subscription": existing_subscription,
+                    "available_courses": courses,
+                    "total_courses": len(courses)
+                }
+
+            # 7. Create subscription
+            start_date = datetime.utcnow()
+            end_date = start_date + timedelta(days=plan.duration_months * 30)
+
+            subscription = Subscription(
+                subscription_id=SubscriptionService.generate_subscription_id(),
+                user_id=user_id,
+                plan_id=plan.id,
+                amount_paid=payment.amount,
+                start_date=start_date,
+                end_date=end_date,
+                status=SubscriptionStatus.ACTIVE,
+                auto_renew=False
+            )
+
+            db.add(subscription)
+            db.flush()  # ✅ ensures subscription.id is available immediately
+
+            # 8. Link payment → subscription
+            payment.subscription_id = subscription.id
+
+            # 9. Commit once to save subscription
+            db.commit()
+
+            # 10. 🎓 ENROLL USER IN ALL COURSES (FREE COURSES)
+            enrolled_courses = []
+            failed_courses = []
+            
+            # Get all published courses
+            all_courses = CourseService.get_courses(db, status="published")
+            
+            for course in all_courses:
+                try:
+                    # Check if course is free OR user has active subscription
+                    if course.price == 0 or subscription:
+                        # Check if already enrolled
+                        existing_enrollment = db.query(Enrollment).filter(
+                            Enrollment.user_id == user_id,
+                            Enrollment.course_id == course.id
+                        ).first()
+                        
+                        if not existing_enrollment:
+                            # Create enrollment
+                            enrollment = Enrollment(
+                                user_id=user_id,
+                                course_id=course.id,
+                                status=EnrollmentStatus.ACTIVE,
+                                progress=0.0
+                            )
+                            db.add(enrollment)
+                            enrolled_courses.append({
+                                "id": course.id,
+                                "title": course.title,
+                                "enrollment_status": "created"
+                            })
+                        else:
+                            enrolled_courses.append({
+                                "id": course.id,
+                                "title": course.title,
+                                "enrollment_status": "already_enrolled"
+                            })
+                except Exception as e:
+                    failed_courses.append({
+                        "id": course.id,
+                        "title": course.title,
+                        "error": str(e)
+                    })
+            
+            # Commit all enrollments
+            db.commit()
+
+            # 11. Refresh objects
+            db.refresh(subscription)
+            db.refresh(plan)
+
             return {
                 "status": "success",
-                "message": "Payment already confirmed",
-                "subscription_id": payment.subscription_id
-            }
-        
-        # Verify payment with Flutterwave
-        verification = flutterwave.verify_payment(tx_ref)
-        
-        if verification["status"] != "success":
-            return {
-                "status": "failed",
-                "message": "Payment verification failed",
-                "details": verification
-            }
-        
-        # Update payment status
-        payment.status = PaymentStatus.COMPLETED
-        payment.paid_at = datetime.utcnow()
-        payment.payment_details = verification
-        payment.flutterwave_reference = verification.get("flw_ref")
-        db.commit()
-        
-        # Get plan
-        plan = db.query(Plan).filter(Plan.id == payment.plan_id).first()
-        if not plan:
-            raise ValueError("Plan not found")
-        
-        # Create subscription
-        start_date = datetime.utcnow()
-        end_date = start_date + timedelta(days=plan.duration_months * 30)
-        
-        subscription = Subscription(
-            subscription_id=SubscriptionService.generate_subscription_id(),
-            user_id=user_id,
-            plan_id=plan.id,
-            amount_paid=payment.amount,
-            start_date=start_date,
-            end_date=end_date,
-            status=SubscriptionStatus.ACTIVE,
-            auto_renew=False
-        )
-        db.add(subscription)
-        db.commit()
-
-        # Link subscription to payment
-        payment.subscription_id = subscription.id
-        db.commit()
-        
-        # Return serializable data (convert SQLAlchemy objects to dicts)
-        return {
-            "status": "success",
-            "message": "Payment confirmed and subscription activated",
-            "subscription_id": subscription.subscription_id,
-            "subscription": {
-                "id": subscription.id,
+                "message": f"Payment confirmed and subscription activated. Enrolled in {len(enrolled_courses)} courses.",
                 "subscription_id": subscription.subscription_id,
-                "user_id": subscription.user_id,
-                "plan_id": subscription.plan_id,
-                "amount_paid": subscription.amount_paid,
-                "start_date": subscription.start_date.isoformat() if subscription.start_date else None,
-                "end_date": subscription.end_date.isoformat() if subscription.end_date else None,
-                "status": subscription.status.value if hasattr(subscription.status, 'value') else str(subscription.status),
-                "auto_renew": subscription.auto_renew,
-                "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-            },
-            "plan": {
-                "id": plan.id,
-                "name": plan.name,
-                "type": plan.type.value if hasattr(plan.type, 'value') else str(plan.type),
-                "duration_months": plan.duration_months,
-                "original_price": plan.original_price,
-                "discounted_price": plan.discounted_price,
-                "discount_percentage": plan.discount_percentage,
-                "description": plan.description,
-                "features": plan.features,
-                "status": plan.status.value if hasattr(plan.status, 'value') else str(plan.status),
-                "sort_order": plan.sort_order
+                "subscription": {
+                    "id": subscription.id,
+                    "subscription_id": subscription.subscription_id,
+                    "user_id": subscription.user_id,
+                    "plan_id": subscription.plan_id,
+                    "amount_paid": subscription.amount_paid,
+                    "start_date": subscription.start_date.isoformat(),
+                    "end_date": subscription.end_date.isoformat(),
+                    "status": subscription.status.value,
+                    "auto_renew": subscription.auto_renew,
+                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
+                },
+                "plan": {
+                    "id": plan.id,
+                    "name": plan.name,
+                    "type": plan.type.value if hasattr(plan.type, 'value') else str(plan.type),
+                    "duration_months": plan.duration_months,
+                    "original_price": plan.original_price,
+                    "discounted_price": plan.discounted_price,
+                    "discount_percentage": plan.discount_percentage,
+                    "description": plan.description,
+                    "features": plan.features,
+                    "status": plan.status.value if hasattr(plan.status, 'value') else str(plan.status),
+                    "sort_order": plan.sort_order
+                },
+                "enrollment_summary": {
+                    "total_courses_available": len(all_courses),
+                    "successfully_enrolled": len(enrolled_courses),
+                    "failed_enrollments": len(failed_courses),
+                    "enrolled_courses": enrolled_courses,
+                    "failed_courses": failed_courses if failed_courses else None
+                },
+                "available_courses": [
+                    {
+                        "id": course.id,
+                        "title": course.title,
+                        "description": course.description,
+                        "price": course.price,
+                        "is_enrolled": any(e["id"] == course.id for e in enrolled_courses),
+                        "image": course.image,
+                        "status": course.status
+                    }
+                    for course in all_courses
+                ]
             }
-        }
 
+        except Exception as e:
+            db.rollback()
+            raise e
+    
     @staticmethod
     def get_user_subscriptions(db: Session, user_id: int) -> List[Subscription]:
         """Get user's subscriptions"""

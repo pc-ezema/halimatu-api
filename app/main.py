@@ -47,6 +47,9 @@ app.include_router(admin.router)
 # Create storage directory if it doesn't exist
 os.makedirs(settings.storage_path, exist_ok=True)
 
+# Create course_images subdirectory
+os.makedirs(os.path.join(settings.storage_path, "course_images"), exist_ok=True)
+
 # Mount static files for profile pictures
 app.mount("/uploads", StaticFiles(directory=settings.storage_path), name="uploads")
 

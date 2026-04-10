@@ -19,6 +19,14 @@ from app.models.payment import Payment, PaymentStatus
 from app.models.subscription import Subscription
 from typing import List
 
+from app.schemas.course import (
+    CourseResponse, CourseDetailResponse, 
+    EnrollmentResponse, UpdateProgressRequest,
+    MessageResponse
+)
+from app.services.course_service import CourseService
+from app.models.enrollment import Enrollment
+
 router = APIRouter(prefix="/api/user", tags=["User"])
 security = HTTPBearer()
 
@@ -303,14 +311,26 @@ def get_plans(
 ):
     """
     Get all available subscription plans with user's subscription status
-    Indicates which plan the user is currently subscribed to
+    Only shows plans if there are published courses available
     """
     try:
         token = credentials.credentials
         user = get_current_user(db, token)
         
+        # Check if there are any published courses
+        from app.services.course_service import CourseService
+        available_courses = CourseService.get_courses(db, status="published")
+        
+        # If no courses available, return empty list with message
+        if not available_courses:
+            return []  # Return empty list, frontend can show "No courses available"
+        
         # Get all active plans
         plans = SubscriptionService.get_plans(db, include_inactive=False)
+        
+        # If no plans available but courses exist
+        if not plans:
+            return []  # Return empty list, no plans configured yet
         
         # Get user's active subscription
         active_subscription = SubscriptionService.get_user_active_subscription(db, user.id)
@@ -345,10 +365,10 @@ def get_plans(
                 "sort_order": int(plan.sort_order),
                 "created_at": plan.created_at,
                 "updated_at": plan.updated_at,
-                "is_current_plan": is_current,  # Always boolean
+                "is_current_plan": is_current,
                 "subscription_status": sub_status,
                 "subscription_end_date": sub_end_date,
-                "days_remaining": days_rem  # Always integer
+                "days_remaining": days_rem
             }
             result.append(plan_dict)
         
@@ -700,5 +720,140 @@ def toggle_auto_renew(
         
     except HTTPException:
         raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== VIEW COURSES ====================
+
+@router.get("/courses", response_model=List[CourseResponse])
+@limiter.limit("30/minute")
+def get_available_courses(
+    request: Request,
+    skip: int = 0,
+    limit: int = 100,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get all published courses for users"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        courses = CourseService.get_courses(db, skip, limit, "published")
+        
+        # Get user's enrollments
+        enrollments = {e.course_id: e for e in db.query(Enrollment).filter(Enrollment.user_id == user.id).all()}
+        
+        result = []
+        for course in courses:
+            enrollment = enrollments.get(course.id)
+            result.append({
+                "id": course.id,
+                "title": course.title,
+                "description": course.description,
+                "price": course.price,
+                "image": course.image,
+                "instructor": course.instructor,
+                "duration_months": course.duration_months,
+                "total_topics": len(course.topics),
+                "is_enrolled": enrollment is not None,
+                "progress": enrollment.progress if enrollment else 0,
+                "created_at": course.created_at,
+                "updated_at": course.updated_at
+            })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}", response_model=CourseDetailResponse)
+@limiter.limit("30/minute")
+def get_course_details(
+    request: Request,
+    course_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get course details with topics"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        course = CourseService.get_course(db, course_id)
+        
+        # Check if user is enrolled
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.user_id == user.id,
+            Enrollment.course_id == course_id
+        ).first()
+        
+        topics = CourseService.get_topics(db, course_id)
+        
+        return {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "price": course.price,
+            "image": course.image,
+            "instructor": course.instructor,
+            "duration_months": course.duration_months,
+            "total_topics": len(topics),
+            "is_enrolled": enrollment is not None,
+            "enrollment_status": enrollment.status if enrollment else None,
+            "progress": enrollment.progress if enrollment else 0,
+            "created_at": course.created_at,
+            "updated_at": course.updated_at,
+            "topics": topics
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== ENROLLMENT ====================
+
+@router.get("/my-enrollments", response_model=List[EnrollmentResponse])
+@limiter.limit("30/minute")
+def get_my_enrollments(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get user's enrolled courses"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        enrollments = CourseService.get_user_enrollments(db, user.id)
+        return enrollments
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/update-progress/{course_id}", response_model=EnrollmentResponse)
+@limiter.limit("20/minute")
+def update_progress(
+    request: Request,
+    course_id: int,
+    data: UpdateProgressRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Update course progress"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        enrollment = CourseService.update_progress(db, user.id, course_id, data.progress)
+        
+        return {
+            "id": enrollment.id,
+            "course_id": enrollment.course_id,
+            "course_title": enrollment.course.title,
+            "status": enrollment.status,
+            "progress": enrollment.progress,
+            "enrolled_at": enrollment.enrolled_at,
+            "completed_at": enrollment.completed_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

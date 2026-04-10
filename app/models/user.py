@@ -74,6 +74,7 @@ class User(Base):
     otps = relationship("OTP", back_populates="user", cascade="all, delete-orphan")
     subscriptions = relationship("Subscription", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    enrollments = relationship("Enrollment", back_populates="user", cascade="all, delete-orphan")
 
     def get_full_name(self):
         """Return the user's full name"""

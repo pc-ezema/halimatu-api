@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     # Application
     app_name: str = "Halimatu"
     debug: bool = False
+    base_url: str
 
     # Security
     secret_key: str
@@ -39,6 +40,8 @@ class Settings(BaseSettings):
 
     # Storage - Use BASE_DIR here too for consistency
     storage_path: str = str(BASE_DIR / "storage")
+    max_upload_size: int = 5 * 1024 * 1024  # 5MB
+    allowed_image_extensions: list = ["jpg", "jpeg", "png"]
 
     # Add to Settings class
     flutterwave_public_key: str
