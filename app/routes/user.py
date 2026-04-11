@@ -26,6 +26,11 @@ from app.schemas.course import (
 )
 from app.services.course_service import CourseService
 from app.models.enrollment import Enrollment
+from app.schemas.certificate import CertificateResponse
+from app.services.certificate_service import CertificateService
+from app.schemas.notification import *
+from app.services.notification_service import NotificationService
+
 
 router = APIRouter(prefix="/api/user", tags=["User"])
 security = HTTPBearer()
@@ -855,5 +860,210 @@ def update_progress(
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+
+# ==================== USER CERTIFICATES ====================
+
+@router.get("/my-certificates", response_model=List[CertificateResponse])
+@limiter.limit("30/minute")
+def get_my_certificates(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get current user's certificates"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        certificates = CertificateService.get_user_certificates(db, user.id, "issued")
+        
+        result = []
+        for cert in certificates:
+            result.append({
+                "id": cert.id,
+                "certificate_id": cert.certificate_id,
+                "certificate_number": cert.certificate_number,
+                "user_id": cert.user_id,
+                "user_name": cert.user.get_full_name(),
+                "user_email": cert.user.email,
+                "course_id": cert.course_id,
+                "course_title": cert.course.title,
+                "course_image": cert.course.image,
+                "full_name": cert.full_name,
+                "grade": cert.grade,
+                "score": cert.score,
+                "duration": cert.duration,
+                "status": cert.status,
+                "issue_date": cert.issue_date,
+                "created_at": cert.created_at
+            })
+        
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/my-certificates/{certificate_id}", response_model=CertificateResponse)
+@limiter.limit("30/minute")
+def get_my_certificate(
+    request: Request,
+    certificate_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get specific certificate for current user"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        certificate = CertificateService.get_certificate_by_id(db, certificate_id)
+        if certificate.user_id != user.id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        return {
+            "id": certificate.id,
+            "certificate_id": certificate.certificate_id,
+            "certificate_number": certificate.certificate_number,
+            "user_id": certificate.user_id,
+            "user_name": certificate.user.get_full_name(),
+            "user_email": certificate.user.email,
+            "course_id": certificate.course_id,
+            "course_title": certificate.course.title,
+            "course_image": certificate.course.image,
+            "full_name": certificate.full_name,
+            "grade": certificate.grade,
+            "score": certificate.score,
+            "duration": certificate.duration,
+            "status": certificate.status,
+            "issue_date": certificate.issue_date,
+            "created_at": certificate.created_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+# ==================== NOTIFICATION MANAGEMENT ====================
+
+@router.get("/notifications", response_model=dict)
+@limiter.limit("30/minute")
+def get_my_notifications(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get current user's notifications"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        result = NotificationService.get_user_notifications(
+            db, user.id, skip, limit, status
+        )
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/notifications/counts", response_model=NotificationCountResponse)
+@limiter.limit("30/minute")
+def get_notification_counts(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get notification counts"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        counts = NotificationService.get_notification_counts(db, user.id)
+        return counts
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/notifications/mark-read", response_model=MessageResponse)
+@limiter.limit("20/minute")
+def mark_notifications_read(
+    request: Request,
+    data: MarkReadRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Mark notifications as read"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        count = NotificationService.mark_as_read(db, user.id, data.notification_ids)
+        
+        if data.notification_ids:
+            message = f"{count} notification(s) marked as read"
+        else:
+            message = f"All {count} notifications marked as read"
+        
+        return MessageResponse(message=message)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/notifications/{notification_id}", response_model=MessageResponse)
+@limiter.limit("20/minute")
+def delete_notification(
+    request: Request,
+    notification_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Delete a notification"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        success = NotificationService.delete_notification(db, user.id, notification_id)
+        
+        if not success:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        
+        return MessageResponse(message="Notification deleted successfully")
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/notifications", response_model=MessageResponse)
+@limiter.limit("10/minute")
+def delete_all_notifications(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Delete all notifications for current user"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        count = NotificationService.delete_all_notifications(db, user.id)
+        
+        return MessageResponse(message=f"{count} notification(s) deleted")
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

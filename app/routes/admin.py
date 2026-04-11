@@ -30,6 +30,21 @@ from app.schemas.course import (
 )
 from app.services.course_service import CourseService
 
+from app.schemas.course import (
+    EnrollmentDetailResponse, 
+    EnrollmentListResponse,
+    MessageResponse
+)
+from app.models.enrollment import Enrollment, EnrollmentStatus
+
+from app.schemas.certificate import (
+    CertificateResponse, CertificateStatsResponse,
+    GenerateCertificateRequest, UpdateCertificateRequest,
+    MessageResponse
+)
+from app.services.certificate_service import CertificateService
+
+
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
 
@@ -908,7 +923,6 @@ def admin_get_user_subscriptions(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-
 # ==================== COURSE MANAGEMENT ====================
 
 @router.post("/courses", response_model=CourseResponse)
@@ -1200,5 +1214,530 @@ def delete_class(
         return MessageResponse(message=result["message"])
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== ENROLLMENT MANAGEMENT ====================
+
+@router.get("/enrollments", response_model=EnrollmentListResponse)
+@admin_route("enrollments")
+def get_all_enrollments(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    course_id: int = None,
+    user_id: int = None,
+    search: str = None,
+    admin: Admin = Depends(require_permission("enrollments")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get all enrollments with user and course information
+    """
+    try:
+        result = CourseService.get_all_enrollments_with_details(
+            db, skip, limit, status, course_id, user_id, search
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/enrollments/{enrollment_id}", response_model=EnrollmentDetailResponse)
+@admin_route("enrollments_view")
+def get_enrollment_details(
+    request: Request,
+    enrollment_id: int,
+    admin: Admin = Depends(require_permission("enrollments_view")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get detailed enrollment information
+    """
+    try:
+        enrollment = CourseService.get_enrollment_by_id_with_details(db, enrollment_id)
+        return enrollment
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/enrollments/stats/summary")
+@admin_route("enrollments_stats")
+def get_enrollment_summary(
+    request: Request,
+    admin: Admin = Depends(require_permission("enrollments_stats")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get enrollment summary statistics
+    """
+    try:
+        from sqlalchemy import func
+        
+        total_enrollments = db.query(Enrollment).count()
+        active_enrollments = db.query(Enrollment).filter(
+            Enrollment.status == EnrollmentStatus.ACTIVE
+        ).count()
+        completed_enrollments = db.query(Enrollment).filter(
+            Enrollment.status == EnrollmentStatus.COMPLETED
+        ).count()
+        dropped_enrollments = db.query(Enrollment).filter(
+            Enrollment.status == EnrollmentStatus.DROPPED
+        ).count()
+        
+        total_users_enrolled = db.query(Enrollment.user_id).distinct().count()
+        total_courses_with_enrollments = db.query(Enrollment.course_id).distinct().count()
+        
+        avg_progress = db.query(func.avg(Enrollment.progress)).scalar() or 0
+        
+        recent_enrollments = CourseService.get_recent_enrollments(db, 5)
+        
+        return {
+            "total_enrollments": total_enrollments,
+            "active_enrollments": active_enrollments,
+            "completed_enrollments": completed_enrollments,
+            "dropped_enrollments": dropped_enrollments,
+            "total_users_enrolled": total_users_enrolled,
+            "total_courses_with_enrollments": total_courses_with_enrollments,
+            "average_progress": round(avg_progress, 2),
+            "recent_enrollments": recent_enrollments
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/enrollments/stats/by-course", response_model=List[dict])
+@admin_route("enrollments_stats_course")
+def get_enrollment_stats_by_course(
+    request: Request,
+    course_id: int = None,
+    admin: Admin = Depends(require_permission("enrollments_stats_course")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get enrollment statistics grouped by course
+    """
+    try:
+        stats = CourseService.get_enrollment_stats_by_course(db, course_id)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}/enrollments", response_model=EnrollmentListResponse)
+@admin_route("courses_enrollments")
+def get_course_enrollments(
+    request: Request,
+    course_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    admin: Admin = Depends(require_permission("courses_enrollments")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get enrollments for a specific course with user information
+    """
+    try:
+        result = CourseService.get_all_enrollments_with_details(
+            db, skip, limit, status, course_id=course_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/users/{user_id}/enrollments", response_model=EnrollmentListResponse)
+@admin_route("users_view_enrollments")
+def get_user_enrollments(
+    request: Request,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    admin: Admin = Depends(require_permission("users_view_enrollments")),
+    db: Session = Depends(get_db),
+):
+    """
+    Get enrollments for a specific user with course information
+    """
+    try:
+        result = CourseService.get_all_enrollments_with_details(
+            db, skip, limit, status, user_id=user_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+# ==================== CERTIFICATE MANAGEMENT ====================
+
+@router.post("/certificates/refresh-all", response_model=dict)
+@admin_route("certificates_create")
+def refresh_all_certificates(
+    request: Request,
+    admin: Admin = Depends(require_permission("certificates_create")),
+    db: Session = Depends(get_db),
+):
+    """Refresh all certificates based on current enrollments"""
+    try:
+        result = CertificateService.refresh_all_certificates(db)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates", response_model=dict)
+@admin_route("certificates")
+def get_all_certificates(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    search: str = None,
+    course_id: int = None,
+    user_id: int = None,
+    admin: Admin = Depends(require_permission("certificates")),
+    db: Session = Depends(get_db),
+):
+    """Get all certificates with filters"""
+    try:
+        result = CertificateService.get_all_certificates(
+            db, skip, limit, status, search, course_id, user_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/stats", response_model=CertificateStatsResponse)
+@admin_route("certificates_stats")
+def get_certificate_stats(
+    request: Request,
+    admin: Admin = Depends(require_permission("certificates_stats")),
+    db: Session = Depends(get_db),
+):
+    """Get certificate statistics for dashboard"""
+    try:
+        stats = CertificateService.get_certificate_stats(db)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/pending", response_model=dict)
+@admin_route("certificates_pending")
+def get_pending_certificates(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    admin: Admin = Depends(require_permission("certificates_pending")),
+    db: Session = Depends(get_db),
+):
+    """Get all pending certificates (ready for approval)"""
+    try:
+        result = CertificateService.get_all_certificates(db, skip, limit, status="pending")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/issued", response_model=dict)
+@admin_route("certificates_issued")
+def get_issued_certificates(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    admin: Admin = Depends(require_permission("certificates_issued")),
+    db: Session = Depends(get_db),
+):
+    """Get all issued certificates"""
+    try:
+        result = CertificateService.get_all_certificates(db, skip, limit, status="issued")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/revoked", response_model=dict)
+@admin_route("certificates_revoked")
+def get_revoked_certificates(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    admin: Admin = Depends(require_permission("certificates_revoked")),
+    db: Session = Depends(get_db),
+):
+    """Get all revoked certificates"""
+    try:
+        result = CertificateService.get_all_certificates(db, skip, limit, status="revoked")
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/{certificate_id}", response_model=CertificateResponse)
+@admin_route("certificates_view")
+def get_certificate_details(
+    request: Request,
+    certificate_id: int,
+    admin: Admin = Depends(require_permission("certificates_view")),
+    db: Session = Depends(get_db),
+):
+    """Get certificate details by ID"""
+    try:
+        certificate = CertificateService.get_certificate_by_id(db, certificate_id)
+        # Get enrollment progress
+        progress = certificate.enrollment.progress if certificate.enrollment else 0
+        
+        return {
+            "id": certificate.id,
+            "certificate_id": certificate.certificate_id,
+            "certificate_number": certificate.certificate_number,
+            "user_id": certificate.user_id,
+            "user_name": certificate.user.get_full_name(),
+            "user_email": certificate.user.email,
+            "user_student_id": certificate.user.student_id,
+            "course_id": certificate.course_id,
+            "course_title": certificate.course.title,
+            "course_image": certificate.course.image,
+            "full_name": certificate.full_name,
+            "grade": certificate.grade,
+            "duration": certificate.duration,
+            "progress": progress,
+            "status": certificate.status,
+            "issue_date": certificate.issue_date,
+            "created_at": certificate.created_at,
+            "updated_at": certificate.updated_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/certificates/{certificate_id}/issue", response_model=CertificateResponse)
+@admin_route("certificates_update_issue")
+def issue_certificate(
+    request: Request,
+    certificate_id: int,
+    admin: Admin = Depends(require_permission("certificates_update_issue")),
+    db: Session = Depends(get_db),
+):
+    """Issue a pending certificate"""
+    try:
+        certificate = CertificateService.issue_certificate(db, certificate_id)
+        return {
+            "id": certificate.id,
+            "certificate_id": certificate.certificate_id,
+            "certificate_number": certificate.certificate_number,
+            "user_id": certificate.user_id,
+            "user_name": certificate.user.get_full_name(),
+            "user_email": certificate.user.email,
+            "user_student_id": certificate.user.student_id,
+            "course_id": certificate.course_id,
+            "course_title": certificate.course.title,
+            "course_image": certificate.course.image,
+            "full_name": certificate.full_name,
+            "grade": certificate.grade,
+            "duration": certificate.duration,
+            "status": certificate.status,
+            "issue_date": certificate.issue_date,
+            "created_at": certificate.created_at,
+            "updated_at": certificate.updated_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/certificates/{certificate_id}/revoke", response_model=CertificateResponse)
+@admin_route("certificates_update_revoke")
+def revoke_certificate(
+    request: Request,
+    certificate_id: int,
+    admin: Admin = Depends(require_permission("certificates_update_revoke")),
+    db: Session = Depends(get_db),
+):
+    """Revoke an issued certificate"""
+    try:
+        certificate = CertificateService.revoke_certificate(db, certificate_id)
+        return {
+            "id": certificate.id,
+            "certificate_id": certificate.certificate_id,
+            "certificate_number": certificate.certificate_number,
+            "user_id": certificate.user_id,
+            "user_name": certificate.user.get_full_name(),
+            "user_email": certificate.user.email,
+            "user_student_id": certificate.user.student_id,
+            "course_id": certificate.course_id,
+            "course_title": certificate.course.title,
+            "course_image": certificate.course.image,
+            "full_name": certificate.full_name,
+            "grade": certificate.grade,
+            "duration": certificate.duration,
+            "status": certificate.status,
+            "issue_date": certificate.issue_date,
+            "created_at": certificate.created_at,
+            "updated_at": certificate.updated_at
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/certificates/bulk-issue", response_model=MessageResponse)
+@admin_route("certificates_bulk_issue")
+def bulk_issue_certificates(
+    request: Request,
+    certificate_ids: List[int],
+    admin: Admin = Depends(require_permission("certificates_bulk_issue")),
+    db: Session = Depends(get_db),
+):
+    """Bulk issue multiple certificates"""
+    try:
+        issued_count = 0
+        failed_ids = []
+        
+        for cert_id in certificate_ids:
+            try:
+                CertificateService.issue_certificate(db, cert_id)
+                issued_count += 1
+            except Exception as e:
+                failed_ids.append({"id": cert_id, "error": str(e)})
+        
+        return MessageResponse(
+            message=f"Issued {issued_count} certificates. Failed: {len(failed_ids)}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/certificates/bulk-revoke", response_model=MessageResponse)
+@admin_route("certificates_bulk_revoke")
+def bulk_revoke_certificates(
+    request: Request,
+    certificate_ids: List[int],
+    admin: Admin = Depends(require_permission("certificates_bulk_revoke")),
+    db: Session = Depends(get_db),
+):
+    """Bulk revoke multiple certificates"""
+    try:
+        revoked_count = 0
+        failed_ids = []
+        
+        for cert_id in certificate_ids:
+            try:
+                CertificateService.revoke_certificate(db, cert_id)
+                revoked_count += 1
+            except Exception as e:
+                failed_ids.append({"id": cert_id, "error": str(e)})
+        
+        return MessageResponse(
+            message=f"Revoked {revoked_count} certificates. Failed: {len(failed_ids)}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/certificates/{certificate_id}", response_model=MessageResponse)
+@admin_route("certificates_delete")
+def delete_certificate(
+    request: Request,
+    certificate_id: int,
+    admin: Admin = Depends(require_permission("certificates_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a certificate (permanent)"""
+    try:
+        CertificateService.delete_certificate(db, certificate_id)
+        return MessageResponse(message="Certificate deleted successfully")
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}/certificates", response_model=dict)
+@admin_route("certificates_course_view")
+def get_course_certificates(
+    request: Request,
+    course_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    admin: Admin = Depends(require_permission("certificates_course_view")),
+    db: Session = Depends(get_db),
+):
+    """Get all certificates for a specific course"""
+    try:
+        result = CertificateService.get_all_certificates(
+            db, skip, limit, status, course_id=course_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/users/{user_id}/certificates", response_model=dict)
+@admin_route("users_certificates_view")
+def get_user_certificates_admin(
+    request: Request,
+    user_id: int,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    admin: Admin = Depends(require_permission("users_certificates_view")),
+    db: Session = Depends(get_db),
+):
+    """Get all certificates for a specific user"""
+    try:
+        result = CertificateService.get_all_certificates(
+            db, skip, limit, status, user_id=user_id
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/certificates/export/csv")
+@admin_route("certificates_export")
+def export_certificates_csv(
+    request: Request,
+    status: str = None,
+    course_id: int = None,
+    admin: Admin = Depends(require_permission("certificates_export")),
+    db: Session = Depends(get_db),
+):
+    """Export certificates to CSV"""
+    try:
+        import csv
+        from fastapi.responses import StreamingResponse
+        import io
+        
+        # Get certificates
+        result = CertificateService.get_all_certificates(
+            db, skip=0, limit=10000, status=status, course_id=course_id
+        )
+        
+        # Create CSV
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Write headers
+        writer.writerow([
+            "Certificate Number", "Student Name", "Student Email", 
+            "Student ID", "Course Title", "Grade", "Progress", "Status", 
+            "Issue Date", "Created At"
+        ])
+        
+        # Write data
+        for cert in result["certificates"]:
+            writer.writerow([
+                cert["certificate_number"],
+                cert["user_name"],
+                cert["user_email"],
+                cert.get("user_student_id", ""),
+                cert["course_title"],
+                cert.get("grade", ""),
+                cert.get("progress", 0),
+                cert["status"],
+                cert.get("issue_date", ""),
+                cert["created_at"]
+            ])
+        
+        # Return CSV file
+        response = StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv"
+        )
+        response.headers["Content-Disposition"] = "attachment; filename=certificates_export.csv"
+        return response
+        
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

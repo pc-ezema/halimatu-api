@@ -21,6 +21,7 @@ class Enrollment(Base):
     # Relationships
     user = relationship("User", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
+    certificates = relationship("Certificate", back_populates="enrollment", cascade="all, delete-orphan")
     
     # Enrollment Details
     status = Column(Enum(EnrollmentStatus), default=EnrollmentStatus.ACTIVE)

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func, or_
 from fastapi import UploadFile
 from app.models.course import Course, CourseStatus
 from app.models.topic import Topic
@@ -290,3 +290,172 @@ class CourseService:
             "completed_enrolled": completed_enrolled,
             "completion_rate": round((completed_enrolled / total_enrolled * 100) if total_enrolled > 0 else 0, 2)
         }
+    
+    @staticmethod
+    def get_all_enrollments_with_details(
+        db: Session, 
+        skip: int = 0, 
+        limit: int = 100,
+        status: str = None,
+        course_id: int = None,
+        user_id: int = None,
+        search: str = None
+    ) -> Dict:
+        """Get all enrollments with user and course details"""
+        query = db.query(Enrollment).join(User).join(Course)
+        
+        # Apply filters
+        if status:
+            query = query.filter(Enrollment.status == status)
+        
+        if course_id:
+            query = query.filter(Enrollment.course_id == course_id)
+        
+        if user_id:
+            query = query.filter(Enrollment.user_id == user_id)
+        
+        if search:
+            query = query.filter(
+                or_(
+                    User.first_name.ilike(f"%{search}%"),
+                    User.last_name.ilike(f"%{search}%"),
+                    User.email.ilike(f"%{search}%"),
+                    User.student_id.ilike(f"%{search}%"),
+                    Course.title.ilike(f"%{search}%")
+                )
+            )
+        
+        # Get total count
+        total = query.count()
+        
+        # Get paginated results
+        enrollments = query.order_by(Enrollment.enrolled_at.desc()).offset(skip).limit(limit).all()
+        
+        # Format results
+        result = []
+        for enrollment in enrollments:
+            result.append({
+                "id": enrollment.id,
+                "enrollment_id": getattr(enrollment, 'enrollment_id', None),
+                "user": {
+                    "id": enrollment.user.id,
+                    "student_id": enrollment.user.student_id,
+                    "name": enrollment.user.get_full_name(),
+                    "email": enrollment.user.email,
+                    "phone_number": enrollment.user.phone_number,
+                    "status": enrollment.user.status,
+                    "profile_picture": enrollment.user.profile_picture,
+                },
+                "course": {
+                    "id": enrollment.course.id,
+                    "title": enrollment.course.title,
+                    "description": enrollment.course.description,
+                    "price": enrollment.course.price,
+                    "image": enrollment.course.image,
+                    "status": enrollment.course.status,
+                    "duration_months": enrollment.course.duration_months,
+                    "total_topics": len(enrollment.course.topics) if hasattr(enrollment.course, 'topics') else 0
+                },
+                "status": enrollment.status,
+                "progress": enrollment.progress,
+                "enrolled_at": enrollment.enrolled_at,
+                "completed_at": enrollment.completed_at,
+                "last_accessed_at": getattr(enrollment, 'last_accessed_at', None)
+            })
+        
+        return {
+            "total": total,
+            "page": (skip // limit) + 1 if limit > 0 else 1,
+            "limit": limit,
+            "total_pages": (total + limit - 1) // limit if limit > 0 else 1,
+            "enrollments": result
+        }
+    
+    @staticmethod
+    def get_enrollment_by_id_with_details(db: Session, enrollment_id: int) -> Dict:
+        """Get single enrollment with user and course details"""
+        enrollment = db.query(Enrollment).filter(Enrollment.id == enrollment_id).first()
+        
+        if not enrollment:
+            raise ValueError("Enrollment not found")
+        
+        return {
+            "id": enrollment.id,
+            "enrollment_id": getattr(enrollment, 'enrollment_id', None),
+            "user": {
+                "id": enrollment.user.id,
+                "student_id": enrollment.user.student_id,
+                "name": enrollment.user.get_full_name(),
+                "email": enrollment.user.email,
+                "phone_number": enrollment.user.phone_number,
+                "status": enrollment.user.status,
+                "profile_picture": enrollment.user.profile_picture,
+            },
+            "course": {
+                "id": enrollment.course.id,
+                "title": enrollment.course.title,
+                "description": enrollment.course.description,
+                "price": enrollment.course.price,
+                "image": enrollment.course.image,
+                "status": enrollment.course.status,
+                "duration_months": enrollment.course.duration_months,
+                "total_topics": len(enrollment.course.topics) if hasattr(enrollment.course, 'topics') else 0
+            },
+            "status": enrollment.status,
+            "progress": enrollment.progress,
+            "enrolled_at": enrollment.enrolled_at,
+            "completed_at": enrollment.completed_at,
+            "last_accessed_at": getattr(enrollment, 'last_accessed_at', None)
+        }
+    
+    @staticmethod
+    def get_enrollment_stats_by_course(db: Session, course_id: int = None) -> Dict:
+        """Get enrollment statistics grouped by course"""
+        query = db.query(
+            Course.id,
+            Course.title,
+            func.count(Enrollment.id).label('total_enrollments'),
+            func.sum(case((Enrollment.status == EnrollmentStatus.ACTIVE, 1), else_=0)).label('active_enrollments'),
+            func.sum(case((Enrollment.status == EnrollmentStatus.COMPLETED, 1), else_=0)).label('completed_enrollments'),
+            func.avg(Enrollment.progress).label('average_progress')
+        ).join(Enrollment, Course.id == Enrollment.course_id)
+        
+        if course_id:
+            query = query.filter(Course.id == course_id)
+        
+        results = query.group_by(Course.id).all()
+        
+        stats = []
+        for result in results:
+            stats.append({
+                "course_id": result.id,
+                "course_title": result.title,
+                "total_enrollments": result.total_enrollments,
+                "active_enrollments": result.active_enrollments or 0,
+                "completed_enrollments": result.completed_enrollments or 0,
+                "average_progress": round(result.average_progress or 0, 2),
+                "completion_rate": round((result.completed_enrollments or 0) / (result.total_enrollments or 1) * 100, 2)
+            })
+        
+        return stats
+    
+    @staticmethod
+    def get_recent_enrollments(db: Session, limit: int = 10) -> List[Dict]:
+        """Get recent enrollments"""
+        enrollments = db.query(Enrollment).order_by(
+            Enrollment.enrolled_at.desc()
+        ).limit(limit).all()
+        
+        result = []
+        for enrollment in enrollments:
+            result.append({
+                "id": enrollment.id,
+                "user_name": enrollment.user.get_full_name(),
+                "user_email": enrollment.user.email,
+                "course_title": enrollment.course.title,
+                "status": enrollment.status,
+                "progress": enrollment.progress,
+                "enrolled_at": enrollment.enrolled_at
+            })
+        
+        return result

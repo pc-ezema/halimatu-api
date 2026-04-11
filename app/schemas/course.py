@@ -121,3 +121,53 @@ class UpdateProgressRequest(BaseModel):
 # ==================== MESSAGE RESPONSE ====================
 class MessageResponse(BaseModel):
     message: str
+
+class EnrollmentUserInfo(BaseModel):
+    """User information for enrollment"""
+    id: int
+    student_id: str
+    name: str
+    email: str
+    phone_number: Optional[str]
+    status: str
+    profile_picture: Optional[str]
+    
+    class Config:
+        from_attributes = True
+
+class EnrollmentCourseInfo(BaseModel):
+    """Course information for enrollment"""
+    id: int
+    title: str
+    description: Optional[str]
+    price: int
+    image: Optional[str]
+    status: str
+    duration_months: Optional[int]
+    total_topics: int = 0
+    
+    class Config:
+        from_attributes = True
+
+class EnrollmentDetailResponse(BaseModel):
+    """Detailed enrollment response with user and course info"""
+    id: int
+    enrollment_id: Optional[str] = None
+    user: EnrollmentUserInfo
+    course: EnrollmentCourseInfo
+    status: str
+    progress: float
+    enrolled_at: datetime
+    completed_at: Optional[datetime]
+    last_accessed_at: Optional[datetime]
+    
+    class Config:
+        from_attributes = True
+
+class EnrollmentListResponse(BaseModel):
+    """Paginated enrollment list response"""
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    enrollments: List[EnrollmentDetailResponse]

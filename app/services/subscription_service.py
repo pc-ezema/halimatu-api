@@ -274,6 +274,16 @@ class SubscriptionService:
             db.add(subscription)
             db.flush()  # ✅ ensures subscription.id is available immediately
 
+            # After subscription is created
+            if subscription:
+                from app.services.notification_service import NotificationService
+                NotificationService.notify_subscription_activated(
+                    db, user_id, plan.name, subscription.end_date
+                )
+                NotificationService.notify_payment_success(
+                    db, user_id, payment.amount, plan.name
+                )
+
             # 8. Link payment → subscription
             payment.subscription_id = subscription.id
 
@@ -306,6 +316,13 @@ class SubscriptionService:
                                 progress=0.0
                             )
                             db.add(enrollment)
+
+                            # After successful enrollment
+                            from app.services.notification_service import NotificationService
+                            NotificationService.notify_enrollment_confirmation(
+                                db, user_id, course.title
+                            )
+                            
                             enrolled_courses.append({
                                 "id": course.id,
                                 "title": course.title,

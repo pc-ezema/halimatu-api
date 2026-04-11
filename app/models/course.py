@@ -26,6 +26,7 @@ class Course(Base):
     # Relationships
     topics = relationship("Topic", back_populates="course", cascade="all, delete-orphan")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
-    
+    certificates = relationship("Certificate", back_populates="course", cascade="all, delete-orphan")
+
     def __repr__(self):
         return f"<Course {self.title}>"

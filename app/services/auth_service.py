@@ -109,6 +109,10 @@ def register_user(db: Session, user_data: dict) -> User:
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    from app.services.notification_service import NotificationService
+    NotificationService.notify_welcome(db, user.id, user.get_full_name())
+    
     return user
 
 def login_user(db: Session, email: str, password: str, ip_address: str = None, background_tasks=None) -> Dict:
