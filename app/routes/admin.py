@@ -44,6 +44,12 @@ from app.schemas.certificate import (
 )
 from app.services.certificate_service import CertificateService
 
+from app.schemas.public import (
+    ContactResponse, ContactStatsResponse, TutorRequestResponse, UpdateContactStatus, UpdateRequestStatus, 
+    MessageResponse, RequestStatsResponse,
+    UpdateContactStatus, ContactStatsResponse, MessageResponse
+)
+from app.services.public_service import PublicService
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 security = HTTPBearer()
@@ -1739,5 +1745,332 @@ def export_certificates_csv(
         response.headers["Content-Disposition"] = "attachment; filename=certificates_export.csv"
         return response
         
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== PRIVATE TUTOR REQUEST MANAGEMENT ====================
+
+@router.get("/tutor-requests", response_model=dict)
+@admin_route("tutor_requests")
+def get_all_tutor_requests(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    search: str = None,
+    admin: Admin = Depends(require_permission("tutor_requests")),
+    db: Session = Depends(get_db),
+):
+    """Get all private tutor requests"""
+    try:
+        result = PublicService.get_all_requests(db, skip, limit, status, search)
+        
+        # Format response
+        formatted_requests = []
+        for req in result["requests"]:
+            formatted_requests.append({
+                "id": req.id,
+                "full_name": req.full_name,
+                "email": req.email,
+                "phone": req.phone,
+                "subject": req.subject,
+                "message": req.message,
+                "student_level": req.student_level,
+                "preferred_schedule": req.preferred_schedule,
+                "status": req.status,
+                "created_at": req.created_at.isoformat() if req.created_at else None
+            })
+        
+        return {
+            "success": True,
+            "total": result["total"],
+            "page": result["page"],
+            "limit": result["limit"],
+            "total_pages": result["total_pages"],
+            "requests": formatted_requests
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/tutor-requests/stats", response_model=RequestStatsResponse)
+@admin_route("tutor_requests_stats")
+def get_tutor_requests_stats(
+    request: Request,
+    admin: Admin = Depends(require_permission("tutor_requests_stats")),
+    db: Session = Depends(get_db),
+):
+    """Get tutor request statistics"""
+    try:
+        stats = PublicService.get_stats(db)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/tutor-requests/{request_id}", response_model=TutorRequestResponse)
+@admin_route("tutor_requests_view")
+def get_tutor_request_detail(
+    request: Request,
+    request_id: int,
+    admin: Admin = Depends(require_permission("tutor_requests_view")),
+    db: Session = Depends(get_db),
+):
+    """Get single tutor request details"""
+    try:
+        req = PublicService.get_request_by_id(db, request_id)
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+        
+        return {
+            "id": req.id,
+            "full_name": req.full_name,
+            "email": req.email,
+            "phone": req.phone,
+            "subject": req.subject,
+            "message": req.message,
+            "student_level": req.student_level,
+            "preferred_schedule": req.preferred_schedule,
+            "status": req.status,
+            "created_at": req.created_at
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/tutor-requests/{request_id}/status", response_model=MessageResponse)
+@admin_route("tutor_requests_update")
+def update_request_status(
+    request: Request,
+    request_id: int,
+    data: UpdateRequestStatus,
+    admin: Admin = Depends(require_permission("tutor_requests_update")),
+    db: Session = Depends(get_db),
+):
+    """Update request status (pending/contacted/completed)"""
+    try:
+        updated_request = PublicService.update_status(db, request_id, data.status)
+        
+        # Optionally send email notification to user when status changes
+        if data.status == "contacted":
+            # Send notification that someone will contact them
+            from app.services.email_service import send_tutor_request_contacted_notification
+            send_tutor_request_contacted_notification(
+                updated_request.email, 
+                updated_request.full_name,
+                updated_request.subject
+            )
+        elif data.status == "completed":
+            from app.services.email_service import send_tutor_request_completed_notification
+            send_tutor_request_completed_notification(
+                updated_request.email,
+                updated_request.full_name,
+                updated_request.subject
+            )
+        
+        return MessageResponse(
+            success=True,
+            message=f"Request status updated to {data.status}",
+            data={
+                "id": request_id,
+                "status": data.status,
+                "updated_at": datetime.utcnow().isoformat()
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/tutor-requests/{request_id}", response_model=MessageResponse)
+@admin_route("tutor_requests_delete")
+def delete_tutor_request(
+    request: Request,
+    request_id: int,
+    admin: Admin = Depends(require_permission("tutor_requests_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a tutor request"""
+    try:
+        result = PublicService.delete_request(db, request_id)
+        return MessageResponse(
+            success=True,
+            message=result["message"]
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/tutor-requests/bulk-delete", response_model=MessageResponse)
+@admin_route("tutor_requests_bulk_delete")
+def bulk_delete_tutor_requests(
+    request: Request,
+    request_ids: List[int],
+    admin: Admin = Depends(require_permission("tutor_requests_bulk_delete")),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete multiple tutor requests"""
+    try:
+        deleted_count = 0
+        failed_ids = []
+        
+        for req_id in request_ids:
+            try:
+                PublicService.delete_request(db, req_id)
+                deleted_count += 1
+            except Exception as e:
+                failed_ids.append({"id": req_id, "error": str(e)})
+        
+        return MessageResponse(
+            success=True,
+            message=f"Deleted {deleted_count} requests. Failed: {len(failed_ids)}",
+            data={
+                "deleted_count": deleted_count,
+                "failed_ids": failed_ids if failed_ids else None
+            }
+        )
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# ==================== CONTACT MESSAGE MANAGEMENT ====================
+
+@router.get("/contact-messages", response_model=dict)
+@admin_route("contact_messages")
+def get_all_contact_messages(
+    request: Request,
+    skip: int = 0,
+    limit: int = 50,
+    status: str = None,
+    search: str = None,
+    admin: Admin = Depends(require_permission("contact_messages")),
+    db: Session = Depends(get_db),
+):
+    """Get all contact messages"""
+    try:
+        result = PublicService.get_all_messages(db, skip, limit, status, search)
+        
+        formatted_messages = []
+        for msg in result["messages"]:
+            formatted_messages.append({
+                "id": msg.id,
+                "full_name": msg.full_name,
+                "email": msg.email,
+                "phone": msg.phone,
+                "subject": msg.subject,
+                "message": msg.message,
+                "status": msg.status,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "read_at": msg.read_at.isoformat() if msg.read_at else None
+            })
+        
+        return {
+            "success": True,
+            "total": result["total"],
+            "page": result["page"],
+            "limit": result["limit"],
+            "total_pages": result["total_pages"],
+            "messages": formatted_messages
+        }
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/contact-messages/stats", response_model=ContactStatsResponse)
+@admin_route("contact_messages_stats")
+def get_contact_stats(
+    request: Request,
+    admin: Admin = Depends(require_permission("contact_messages_stats")),
+    db: Session = Depends(get_db),
+):
+    """Get contact message statistics"""
+    try:
+        stats = PublicService.get_stats(db)
+        return stats
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/contact-messages/{message_id}", response_model=ContactResponse)
+@admin_route("contact_view")
+def get_contact_message(
+    request: Request,
+    message_id: int,
+    admin: Admin = Depends(require_permission("contact_view")),
+    db: Session = Depends(get_db),
+):
+    """Get single contact message details"""
+    try:
+        message = PublicService.get_message_by_id(db, message_id)
+        if not message:
+            raise HTTPException(status_code=404, detail="Message not found")
+        
+        return message
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.put("/contact-messages/{message_id}/status", response_model=MessageResponse)
+@admin_route("contact_message_update")
+def update_contact_status(
+    request: Request,
+    message_id: int,
+    data: UpdateContactStatus,
+    admin: Admin = Depends(require_permission("contact_message_update")),
+    db: Session = Depends(get_db),
+):
+    """Update message status (unread/read/replied)"""
+    try:
+        updated = PublicService.update_status(db, message_id, data.status)
+        return MessageResponse(
+            success=True,
+            message=f"Message status updated to {data.status}",
+            data={"id": message_id, "status": data.status}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.delete("/contact-messages/{message_id}", response_model=MessageResponse)
+@admin_route("contact_message_delete")
+def delete_contact_message(
+    request: Request,
+    message_id: int,
+    admin: Admin = Depends(require_permission("contact_message_delete")),
+    db: Session = Depends(get_db),
+):
+    """Delete a contact message"""
+    try:
+        result = PublicService.delete_message(db, message_id)
+        return MessageResponse(success=True, message=result["message"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/contact-messages/bulk-delete", response_model=MessageResponse)
+@admin_route("contact_message_bulk_delete")
+def bulk_delete_contact_messages(
+    request: Request,
+    message_ids: List[int],
+    admin: Admin = Depends(require_permission("contact_message_bulk_delete")),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete multiple contact messages"""
+    try:
+        deleted_count = 0
+        failed_ids = []
+        
+        for msg_id in message_ids:
+            try:
+                PublicService.delete_message(db, msg_id)
+                deleted_count += 1
+            except Exception as e:
+                failed_ids.append({"id": msg_id, "error": str(e)})
+        
+        return MessageResponse(
+            success=True,
+            message=f"Deleted {deleted_count} messages. Failed: {len(failed_ids)}",
+            data={"deleted_count": deleted_count, "failed_ids": failed_ids if failed_ids else None}
+        )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

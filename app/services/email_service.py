@@ -428,6 +428,321 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
     
     send_email(email, subject, body)
     
+def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
+    """Send confirmation email when someone requests a private tutor"""
+    current_year = datetime.now().year
+
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Tutor Request Received - Halimatu</title>
+    </head>
+    <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+                <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
+                    <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
+                         alt="Halimatu" 
+                         style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                </td>
+            </tr>
+            
+            <!-- Content -->
+            <tr>
+                <td style="padding:40px 30px;">
+                    <h2 style="font-size:24px; font-weight:600; color:#1a1a1a; margin-bottom:15px; text-align:center;">Tutor Request Received! 📚</h2>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:15px; text-align:center;">
+                        Hello <strong>{user_name}</strong>,
+                    </p>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:25px; text-align:center;">
+                        Thank you for submitting a tutor request. We have received your request for <strong>{subject}</strong> and will match you with a qualified tutor shortly.
+                    </p>
+                    
+                    <!-- Info Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border-radius:16px; padding:30px; text-align:center; margin:25px 0;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <div style="font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#4338ca; margin-bottom:15px; font-weight:600;">What Happens Next?</div>
+                                <div style="text-align:left; color:#1e3a8a;">
+                                    <p>✅ Our team will review your request</p>
+                                    <p>✅ We'll match you with a qualified tutor</p>
+                                    <p>✅ You will be contacted within 24-48 hours</p>
+                                    <p>✅ The tutor will reach out to schedule your first session</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <!-- Support Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdf4; border-radius:12px; padding:15px; margin:20px 0;">
+                        <tr>
+                            <td style="text-align:center; color:#166534; font-size:14px;">
+                                💡 <strong>Need immediate assistance?</strong><br>
+                                Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a> or call +234 XXX XXX XXXX
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <a href="https://halimatu.farmsglobal.org" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            
+            <!-- Footer -->
+            <tr>
+                <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    send_email(email, "Your Tutor Request Has Been Received - Halimatu", body)
+
+def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
+    """Send notification email to admin about new tutor request"""
+    current_year = datetime.now().year
+
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Tutor Request - Halimatu</title>
+    </head>
+    <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+                <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
+                    <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
+                         alt="Halimatu" 
+                         style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                </td>
+            </tr>
+            
+            <!-- Content -->
+            <tr>
+                <td style="padding:40px 30px;">
+                    <h2 style="font-size:24px; font-weight:600; color:#1a1a1a; margin-bottom:15px; text-align:center;">New Tutor Request 📝</h2>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:25px; text-align:center;">
+                        A new private tutor request has been submitted. Please review the details below.
+                    </p>
+                    
+                    <!-- Request Details Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; padding:20px; margin:20px 0;">
+                        <tr>
+                            <td>
+                                <p><strong>👤 Name:</strong> {request_data.get('full_name', 'N/A')}</p>
+                                <p><strong>📧 Email:</strong> {request_data.get('email', 'N/A')}</p>
+                                <p><strong>📞 Phone:</strong> {request_data.get('phone', 'N/A')}</p>
+                                <p><strong>📚 Subject:</strong> {request_data.get('subject', 'N/A')}</p>
+                                <p><strong>📝 Message:</strong> {request_data.get('message', 'N/A')}</p>
+                                <p><strong>🎓 Student Level:</strong> {request_data.get('student_level', 'N/A')}</p>
+                                <p><strong>📅 Preferred Schedule:</strong> {request_data.get('preferred_schedule', 'N/A')}</p>
+                                <p><strong>🕐 Submitted:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <a href="https://halimatu.farmsglobal.org/admin/tutor-requests" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Requests →</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            
+            <!-- Footer -->
+            <tr>
+                <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px; color:#6b7280;">© {current_year} Halimatu. All rights reserved.</div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    send_email(admin_email, f"New Tutor Request - {request_data.get('subject', 'Tutor Request')}", body)
+
+def send_contact_confirmation(email: str, user_name: str, subject: str):
+    """Send confirmation email when someone submits contact form"""
+    current_year = datetime.now().year
+
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Thank You - Halimatu</title>
+    </head>
+    <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+                <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
+                    <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
+                         alt="Halimatu" 
+                         style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                </td>
+            </tr>
+            
+            <!-- Content -->
+            <tr>
+                <td style="padding:40px 30px;">
+                    <h2 style="font-size:24px; font-weight:600; color:#1a1a1a; margin-bottom:15px; text-align:center;">Thank You for Contacting Us! 📧</h2>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:15px; text-align:center;">
+                        Hello <strong>{user_name}</strong>,
+                    </p>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:25px; text-align:center;">
+                        Thank you for reaching out to us. We have received your message regarding <strong>'{subject}'</strong>.
+                    </p>
+                    
+                    <!-- Info Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border-radius:16px; padding:30px; text-align:center; margin:25px 0;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <div style="font-size:13px; text-transform:uppercase; letter-spacing:2px; color:#4338ca; margin-bottom:15px; font-weight:600;">What Happens Next?</div>
+                                <div style="text-align:left; color:#1e3a8a;">
+                                    <p>✅ Our team will review your message</p>
+                                    <p>✅ We'll get back to you within 24-48 hours</p>
+                                    <p>✅ A support representative will respond to your inquiry</p>
+                                    <p>✅ You can reply directly to this email if needed</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <!-- Support Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdf4; border-radius:12px; padding:15px; margin:20px 0;">
+                        <tr>
+                            <td style="text-align:center; color:#166534; font-size:14px;">
+                                💡 <strong>Need immediate assistance?</strong><br>
+                                Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <a href="https://halimatu.farmsglobal.org" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            
+            <!-- Footer -->
+            <tr>
+                <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    send_email(email, "Thank You for Contacting Halimatu", body)
+
+def send_contact_admin_notification(admin_email: str, contact_data: dict):
+    """Send notification email to admin about new contact message"""
+    current_year = datetime.now().year
+
+    body = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>New Contact Message - Halimatu</title>
+    </head>
+    <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
+            <!-- Header -->
+            <tr>
+                <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
+                    <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
+                         alt="Halimatu" 
+                         style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                </td>
+            </tr>
+            
+            <!-- Content -->
+            <tr>
+                <td style="padding:40px 30px;">
+                    <h2 style="font-size:24px; font-weight:600; color:#1a1a1a; margin-bottom:15px; text-align:center;">New Contact Message 📝</h2>
+                    
+                    <p style="font-size:16px; color:#4a5568; margin-bottom:25px; text-align:center;">
+                        A new message has been submitted through the contact form. Please review the details below.
+                    </p>
+                    
+                    <!-- Message Details Box -->
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb; border-radius:12px; padding:20px; margin:20px 0;">
+                        <tr>
+                            <td>
+                                <p><strong>👤 Name:</strong> {contact_data.get('full_name', 'N/A')}</p>
+                                <p><strong>📧 Email:</strong> {contact_data.get('email', 'N/A')}</p>
+                                <p><strong>📞 Phone:</strong> {contact_data.get('phone', 'N/A')}</p>
+                                <p><strong>📚 Subject:</strong> {contact_data.get('subject', 'N/A')}</p>
+                                <p><strong>💬 Message:</strong></p>
+                                <p style="background:#e5e7eb; padding:15px; border-radius:8px; margin-top:5px;">{contact_data.get('message', 'N/A')}</p>
+                                <p><strong>🕐 Submitted:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                            </td>
+                        </tr>
+                    </table>
+                    
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
+                        <tr>
+                            <td style="text-align:center;">
+                                <a href="https://halimatu.farmsglobal.org/admin/contact-messages" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Messages →</a>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+            </tr>
+            
+            <!-- Footer -->
+            <tr>
+                <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
+                    <div style="font-size:12px; color:#6b7280;">© {current_year} Halimatu. All rights reserved.</div>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    send_email(admin_email, f"New Contact Message - {contact_data.get('subject', 'Contact')}", body)
+
 def send_email(to_email: str, subject: str, html_body: str):
     """Generic sender"""
     try:

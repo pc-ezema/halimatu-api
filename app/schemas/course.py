@@ -31,6 +31,14 @@ class TopicResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TopicWithProgressResponse(TopicResponse):
+    is_completed: bool = False
+    progress_percentage: float = 0
+    classes: List['ClassWithProgressResponse'] = []
+    
+    class Config:
+        from_attributes = True
+
 # ==================== CLASS SCHEMAS ====================
 class ClassCreate(BaseModel):
     name: str = Field(..., min_length=3, max_length=200)
@@ -57,6 +65,12 @@ class ClassResponse(BaseModel):
     status: ClassStatus
     topic_id: int
     created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class ClassWithProgressResponse(ClassResponse):
+    is_completed: bool = False
     
     class Config:
         from_attributes = True
@@ -90,6 +104,8 @@ class CourseResponse(BaseModel):
     instructor: Optional[str]
     total_topics: int = 0
     total_enrolled: int = 0
+    total_classes: int = 0
+    is_enrolled: bool = False
     created_at: datetime
     updated_at: datetime
     
@@ -97,7 +113,10 @@ class CourseResponse(BaseModel):
         from_attributes = True
 
 class CourseDetailResponse(CourseResponse):
-    topics: List[TopicResponse] = []
+    is_enrolled: bool = False
+    enrollment_status: Optional[str] = None
+    progress: float = 0
+    topics: List[TopicWithProgressResponse] = []
     
     class Config:
         from_attributes = True
@@ -117,6 +136,10 @@ class EnrollmentResponse(BaseModel):
 
 class UpdateProgressRequest(BaseModel):
     progress: float = Field(..., ge=0, le=100)
+
+class MarkTopicCompleteRequest(BaseModel):
+    topic_id: int
+    is_completed: bool = True
 
 # ==================== MESSAGE RESPONSE ====================
 class MessageResponse(BaseModel):
@@ -171,3 +194,11 @@ class EnrollmentListResponse(BaseModel):
     limit: int
     total_pages: int
     enrollments: List[EnrollmentDetailResponse]
+
+class MarkClassCompleteRequest(BaseModel):
+    """Request to mark a class as complete"""
+    is_completed: bool = True
+
+class MarkTopicCompleteRequest(BaseModel):
+    """Request to mark a topic as complete"""
+    is_completed: bool = True

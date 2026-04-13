@@ -9,6 +9,9 @@ from app.models.class_model import Class, ClassStatus
 from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.models.user import User
 from app.utils.image_upload import ImageUpload
+from app.models.topic_progress import TopicProgress
+from app.models.class_progress import ClassProgress  # Keep for tracking individual class completion
+
 
 class CourseService:
     
@@ -459,3 +462,253 @@ class CourseService:
             })
         
         return result
+
+    @staticmethod
+    def get_user_topic_progress(db: Session, user_id: int, topic_id: int) -> bool:
+        """Check if user has completed a topic"""
+        from app.models.topic_progress import TopicProgress
+        progress = db.query(TopicProgress).filter(
+            TopicProgress.user_id == user_id,
+            TopicProgress.topic_id == topic_id,
+            TopicProgress.is_completed == True
+        ).first()
+        return progress is not None
+
+    @staticmethod
+    def get_user_class_progress(db: Session, user_id: int, class_id: int) -> bool:
+        """Check if user has completed a class"""
+        from app.models.class_progress import ClassProgress
+        progress = db.query(ClassProgress).filter(
+            ClassProgress.user_id == user_id,
+            ClassProgress.class_id == class_id,
+            ClassProgress.is_completed == True
+        ).first()
+        return progress is not None
+
+    @staticmethod
+    def mark_topic_complete(db: Session, user_id: int, topic_id: int, is_completed: bool = True) -> Dict:
+        """Mark a topic as completed for a user"""
+        from app.models.topic_progress import TopicProgress
+        
+        progress = db.query(TopicProgress).filter(
+            TopicProgress.user_id == user_id,
+            TopicProgress.topic_id == topic_id
+        ).first()
+        
+        if not progress:
+            progress = TopicProgress(
+                user_id=user_id,
+                topic_id=topic_id,
+                is_completed=is_completed
+            )
+            db.add(progress)
+        else:
+            progress.is_completed = is_completed
+            if is_completed:
+                progress.completed_at = datetime.utcnow()
+        
+        db.commit()
+        
+        # Update overall course progress
+        topic = db.query(Topic).filter(Topic.id == topic_id).first()
+        if topic:
+            CourseService.update_course_progress_from_topics(db, user_id, topic.course_id)
+        
+        return {"message": f"Topic marked as {'completed' if is_completed else 'incomplete'}"}
+
+    @staticmethod
+    def update_course_progress_from_topics(db: Session, user_id: int, course_id: int) -> float:
+        """Calculate course progress based on completed topics"""
+        from app.models.topic_progress import TopicProgress
+        
+        topics = db.query(Topic).filter(Topic.course_id == course_id).all()
+        if not topics:
+            return 0
+        
+        completed_count = 0
+        for topic in topics:
+            progress = db.query(TopicProgress).filter(
+                TopicProgress.user_id == user_id,
+                TopicProgress.topic_id == topic.id,
+                TopicProgress.is_completed == True
+            ).first()
+            if progress:
+                completed_count += 1
+        
+        progress_percentage = (completed_count / len(topics)) * 100
+        
+        # Update enrollment progress
+        enrollment = db.query(Enrollment).filter(
+            Enrollment.user_id == user_id,
+            Enrollment.course_id == course_id
+        ).first()
+        
+        if enrollment:
+            enrollment.progress = progress_percentage
+            if progress_percentage >= 100:
+                enrollment.status = EnrollmentStatus.COMPLETED
+                enrollment.completed_at = datetime.utcnow()
+            db.commit()
+        
+        return progress_percentage
+
+    @staticmethod
+    def mark_class_complete(db: Session, user_id: int, class_id: int, is_completed: bool = True) -> Dict:
+        """Mark a class as completed and update topic progress accordingly"""
+        
+        # Get the class and its topic
+        class_obj = db.query(Class).filter(Class.id == class_id).first()
+        if not class_obj:
+            raise ValueError("Class not found")
+        
+        topic_id = class_obj.topic_id
+        
+        # Update or create class progress
+        class_progress = db.query(ClassProgress).filter(
+            ClassProgress.user_id == user_id,
+            ClassProgress.class_id == class_id
+        ).first()
+        
+        if not class_progress:
+            class_progress = ClassProgress(
+                user_id=user_id,
+                class_id=class_id,
+                is_completed=is_completed
+            )
+            db.add(class_progress)
+        else:
+            class_progress.is_completed = is_completed
+            if is_completed:
+                class_progress.completed_at = datetime.utcnow()
+        
+        db.flush()
+        
+        # Check if all classes in this topic are completed
+        all_classes = db.query(Class).filter(Class.topic_id == topic_id).all()
+        completed_classes = db.query(ClassProgress).filter(
+            ClassProgress.user_id == user_id,
+            ClassProgress.class_id.in_([c.id for c in all_classes]),
+            ClassProgress.is_completed == True
+        ).count()
+        
+        # If all classes are completed, mark the topic as completed
+        if completed_classes == len(all_classes) and len(all_classes) > 0:
+            topic_progress = db.query(TopicProgress).filter(
+                TopicProgress.user_id == user_id,
+                TopicProgress.topic_id == topic_id
+            ).first()
+            
+            if not topic_progress:
+                topic_progress = TopicProgress(
+                    user_id=user_id,
+                    topic_id=topic_id,
+                    is_completed=True,
+                    completed_at=datetime.utcnow()
+                )
+                db.add(topic_progress)
+            elif not topic_progress.is_completed:
+                topic_progress.is_completed = True
+                topic_progress.completed_at = datetime.utcnow()
+            
+            db.flush()
+            
+            # Update overall course progress
+            topic = db.query(Topic).filter(Topic.id == topic_id).first()
+            if topic:
+                CourseService.update_course_progress_from_topics(db, user_id, topic.course_id)
+        
+        db.commit()
+        
+        return {
+            "message": f"Class marked as {'completed' if is_completed else 'incomplete'}",
+            "topic_completed": completed_classes == len(all_classes) and len(all_classes) > 0
+        }
+
+    @staticmethod
+    def get_topic_completion_status(db: Session, user_id: int, topic_id: int) -> Dict:
+        """Get completion status for a topic and its classes"""
+        
+        # Get all classes in this topic
+        classes = db.query(Class).filter(Class.topic_id == topic_id).all()
+        
+        # Get completed classes
+        completed_class_ids = set()
+        class_progress_list = db.query(ClassProgress).filter(
+            ClassProgress.user_id == user_id,
+            ClassProgress.class_id.in_([c.id for c in classes]),
+            ClassProgress.is_completed == True
+        ).all()
+        
+        for progress in class_progress_list:
+            completed_class_ids.add(progress.class_id)
+        
+        # Prepare class status
+        classes_status = []
+        for cls in classes:
+            classes_status.append({
+                "id": cls.id,
+                "name": cls.name,
+                "meeting_link": cls.meeting_link,
+                "start_date": cls.start_date,
+                "end_date": cls.end_date,
+                "is_completed": cls.id in completed_class_ids
+            })
+        
+        # Check if topic is completed
+        topic_progress = db.query(TopicProgress).filter(
+            TopicProgress.user_id == user_id,
+            TopicProgress.topic_id == topic_id,
+            TopicProgress.is_completed == True
+        ).first()
+        
+        is_topic_completed = topic_progress is not None
+        completed_classes_count = len(completed_class_ids)
+        total_classes = len(classes)
+        
+        return {
+            "topic_id": topic_id,
+            "is_completed": is_topic_completed,
+            "completed_classes": completed_classes_count,
+            "total_classes": total_classes,
+            "progress_percentage": (completed_classes_count / total_classes * 100) if total_classes > 0 else 100 if is_topic_completed else 0,
+            "classes": classes_status
+        }
+
+    @staticmethod
+    def get_course_with_progress(db: Session, user_id: int, course_id: int) -> Dict:
+        """Get course details with topic and class progress"""
+        
+        course = CourseService.get_course(db, course_id)
+        topics = CourseService.get_topics(db, course_id)
+        
+        topics_with_progress = []
+        completed_topics = 0
+        
+        for topic in topics:
+            topic_status = CourseService.get_topic_completion_status(db, user_id, topic.id)
+            topics_with_progress.append({
+                "id": topic.id,
+                "title": topic.title,
+                "order": topic.order,
+                "is_completed": topic_status["is_completed"],
+                "progress_percentage": topic_status["progress_percentage"],
+                "completed_classes": topic_status["completed_classes"],
+                "total_classes": topic_status["total_classes"],
+                "classes": topic_status["classes"]
+            })
+            
+            if topic_status["is_completed"]:
+                completed_topics += 1
+        
+        total_topics = len(topics)
+        course_progress = (completed_topics / total_topics * 100) if total_topics > 0 else 0
+        
+        return {
+            "course": course,
+            "topics": topics_with_progress,
+            "progress": {
+                "completed_topics": completed_topics,
+                "total_topics": total_topics,
+                "percentage": course_progress
+            }
+        }

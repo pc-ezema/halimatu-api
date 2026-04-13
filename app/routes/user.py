@@ -21,7 +21,7 @@ from typing import List
 
 from app.schemas.course import (
     CourseResponse, CourseDetailResponse, 
-    EnrollmentResponse, UpdateProgressRequest,
+    EnrollmentResponse, MarkClassCompleteRequest, MarkTopicCompleteRequest, UpdateProgressRequest,
     MessageResponse
 )
 from app.services.course_service import CourseService
@@ -757,19 +757,21 @@ def get_available_courses(
                 "title": course.title,
                 "description": course.description,
                 "price": course.price,
+                "status": course.status.value if hasattr(course.status, 'value') else str(course.status),  # Add status
                 "image": course.image,
-                "instructor": course.instructor,
-                "duration_months": course.duration_months,
+                "duration_months": getattr(course, 'duration_months', 0),
+                "instructor": getattr(course, 'instructor', None),
                 "total_topics": len(course.topics),
+                "total_enrolled": course.total_students if hasattr(course, 'total_students') else 0,
+                "total_classes": sum(len(t.classes) for t in course.topics),
                 "is_enrolled": enrollment is not None,
-                "progress": enrollment.progress if enrollment else 0,
                 "created_at": course.created_at,
                 "updated_at": course.updated_at
             })
         return result
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
+    
 @router.get("/courses/{course_id}", response_model=CourseDetailResponse)
 @limiter.limit("30/minute")
 def get_course_details(
@@ -778,7 +780,7 @@ def get_course_details(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ):
-    """Get course details with topics"""
+    """Get course details with topics, classes, and completion status"""
     try:
         token = credentials.credentials
         user = get_current_user(db, token)
@@ -793,27 +795,143 @@ def get_course_details(
         
         topics = CourseService.get_topics(db, course_id)
         
+        # Get topics with progress and their classes
+        topics_with_progress = []
+        for topic in topics:
+            # Check if topic is completed
+            topic_completed = CourseService.get_user_topic_progress(db, user.id, topic.id)
+            
+            # Get classes for this topic with progress
+            classes = CourseService.get_classes(db, topic.id)
+            classes_with_progress = []
+            for cls in classes:
+                class_completed = CourseService.get_user_class_progress(db, user.id, cls.id)
+                classes_with_progress.append({
+                    "id": cls.id,
+                    "name": cls.name,
+                    "meeting_link": cls.meeting_link,
+                    "meeting_password": cls.meeting_password,
+                    "start_date": cls.start_date,
+                    "end_date": cls.end_date,
+                    "status": cls.status,
+                    "topic_id": cls.topic_id,
+                    "created_at": cls.created_at,
+                    "is_completed": class_completed
+                })
+            
+            topics_with_progress.append({
+                "id": topic.id,
+                "title": topic.title,
+                "order": topic.order,
+                "course_id": topic.course_id,
+                "created_at": topic.created_at,
+                "is_completed": topic_completed,
+                "progress_percentage": 100 if topic_completed else 0,
+                "classes": classes_with_progress
+            })
+        
         return {
             "id": course.id,
             "title": course.title,
             "description": course.description,
             "price": course.price,
             "image": course.image,
-            "instructor": course.instructor,
-            "duration_months": course.duration_months,
+            "instructor": getattr(course, 'instructor', None),
+            "duration_months": getattr(course, 'duration_months', 0),
+            "status": course.status,
             "total_topics": len(topics),
+            "total_classes": sum(len(t.classes) for t in topics),
+            "total_enrolled": course.total_enrolled if hasattr(course, 'total_enrolled') else 0,
             "is_enrolled": enrollment is not None,
             "enrollment_status": enrollment.status if enrollment else None,
             "progress": enrollment.progress if enrollment else 0,
             "created_at": course.created_at,
             "updated_at": course.updated_at,
-            "topics": topics
+            "topics": topics_with_progress
         }
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+@router.post("/topics/{topic_id}/complete", response_model=MessageResponse)
+@limiter.limit("20/minute")
+def mark_topic_complete(
+    request: Request,
+    topic_id: int,
+    data: MarkTopicCompleteRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Mark a topic as completed"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        result = CourseService.mark_topic_complete(db, user.id, topic_id, data.is_completed)
+        return MessageResponse(message=result["message"])
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
+@router.post("/classes/{class_id}/complete", response_model=MessageResponse)
+@limiter.limit("20/minute")
+def mark_class_complete(
+    request: Request,
+    class_id: int,
+    data: MarkClassCompleteRequest,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Mark a class as completed - automatically updates topic and course progress"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        result = CourseService.mark_class_complete(db, user.id, class_id, data.is_completed)
+        
+        message = result["message"]
+        if result.get("topic_completed"):
+            message += " 🎉 Topic completed!"
+        
+        return MessageResponse(message=message)
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/courses/{course_id}/progress", response_model=dict)
+@limiter.limit("30/minute")
+def get_course_progress(
+    request: Request,
+    course_id: int,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get detailed course progress with topic and class completion"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        result = CourseService.get_course_with_progress(db, user.id, course_id)
+        
+        return {
+            "course_id": result["course"].id,
+            "course_title": result["course"].title,
+            "progress_percentage": result["progress"]["percentage"],
+            "completed_topics": result["progress"]["completed_topics"],
+            "total_topics": result["progress"]["total_topics"],
+            "topics": result["topics"]
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
 # ==================== ENROLLMENT ====================
 
 @router.get("/my-enrollments", response_model=List[EnrollmentResponse])

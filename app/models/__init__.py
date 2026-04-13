@@ -9,8 +9,12 @@ from .subscription import Subscription, SubscriptionStatus
 from .payment import Payment, PaymentStatus, PaymentMethod
 from .course import Course, CourseStatus
 from .topic import Topic
+from .class_progress import ClassProgress
+from .topic_progress import TopicProgress
 from .class_model import Class, ClassStatus
 from .enrollment import Enrollment, EnrollmentStatus
+from .contact import ContactMessage, ContactStatus
+from .private_tutor import PrivateTutorRequest, RequestStatus
 
 __all__ = [
     "User", "GenderEnum", "UserStatusEnum",
@@ -24,4 +28,8 @@ __all__ = [
     "Topic",
     "Class", "ClassStatus",
     "Enrollment", "EnrollmentStatus",
+    "ClassProgress",
+    "TopicProgress",
+    "ContactMessage", "ContactStatus",
+    "PrivateTutorRequest", "RequestStatus"
 ]

@@ -51,6 +51,8 @@ class Settings(BaseSettings):
     flutterwave_production: bool = False  # False for sandbox, True for production
     frontend_url: str = "http://localhost:3000"
 
+    admin_email: str
+
     # 2. Modern Pydantic V2 Configuration
     model_config = SettingsConfigDict(
         env_file=str(ENV_FILE),

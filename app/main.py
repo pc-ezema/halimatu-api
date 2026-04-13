@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 from app.config.limiter import limiter
 from app.core.logger import setup_logger
 from app.database.database import engine, Base
-from app.routes import auth, user, admin
+from app.routes import auth, user, admin, public
 # Serve static files for profile pictures
 from fastapi.staticfiles import StaticFiles
 import os
@@ -43,6 +43,7 @@ app.add_middleware(SlowAPIMiddleware)
 app.include_router(auth.router)
 app.include_router(user.router) 
 app.include_router(admin.router)
+app.include_router(public.router)
 
 # Create storage directory if it doesn't exist
 os.makedirs(settings.storage_path, exist_ok=True)
