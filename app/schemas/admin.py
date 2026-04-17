@@ -2,10 +2,32 @@ from pydantic import BaseModel, Field, EmailStr, field_validator
 from datetime import datetime
 from typing import Optional, List
 
-from sqlalchemy import String
+# ==================== ROLE SCHEMAS (Move these UP) ====================
+class RoleCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=50)
 
-# Add these to your existing admin schemas
+class RoleUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=2, max_length=50)
 
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ==================== PERMISSION SCHEMAS ====================
+class PermissionResponse(BaseModel):
+    id: int
+    name: str
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# ==================== ADMIN PROFILE SCHEMAS ====================
 class AdminProfileUpdate(BaseModel):
     """Update admin profile"""
     name: Optional[str] = Field(None, min_length=2, max_length=100)
@@ -49,7 +71,7 @@ class AdminProfileResponse(BaseModel):
     id: int
     name: str
     email: str
-    role: Optional[RoleResponse]
+    role: Optional[RoleResponse]  # Now RoleResponse is defined above
     status: str
     is_active: bool
     last_login: Optional[datetime]
@@ -58,35 +80,7 @@ class AdminProfileResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class MessageResponse(BaseModel):
-    message: str
-    
-# Role Schemas
-class RoleCreate(BaseModel):
-    name: str = Field(..., min_length=2, max_length=50)
-
-class RoleUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=50)
-
-class RoleResponse(BaseModel):
-    id: int
-    name: str
-    created_at: datetime
-    updated_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# Permission Schemas
-class PermissionResponse(BaseModel):
-    id: int
-    name: str
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
-
-# Admin Schemas
+# ==================== ADMIN SCHEMAS ====================
 class AdminCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     email: EmailStr
@@ -98,10 +92,6 @@ class AdminUpdate(BaseModel):
     email: Optional[EmailStr] = None
     role_id: Optional[int] = None
     status: Optional[str] = None
-
-class AdminChangePassword(BaseModel):
-    current_password: str
-    new_password: str = Field(..., min_length=8)
 
 class AdminLogin(BaseModel):
     email: EmailStr
@@ -124,14 +114,15 @@ class AdminTokenResponse(BaseModel):
     token_type: str = "bearer"
     admin: AdminResponse
 
-# Assign Permission
+# ==================== ASSIGN PERMISSION ====================
 class AssignPermissionRequest(BaseModel):
     permission_ids: List[int]
 
-# Message Response
+# ==================== MESSAGE RESPONSE ====================
 class MessageResponse(BaseModel):
     message: str
 
+# ==================== USER SCHEMAS FOR ADMIN ====================
 class UserBasicResponse(BaseModel):
     """Basic user info for admin listing"""
     id: int
