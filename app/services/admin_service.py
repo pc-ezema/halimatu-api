@@ -6,10 +6,101 @@ from sqlalchemy.orm import Session
 from app.models.admin import Admin
 from app.models.role import Role
 from app.models.permission import Permission
-from app.services.admin_auth_service import hash_password
+from app.services.admin_auth_service import hash_password, verify_password
 from app.models.user import User
 from app.utils.password_generator import PasswordGenerator
 from app.services.email_service import send_new_password_email
+
+class AdminService:
+    """Service for admin-related operations"""
+    
+    @staticmethod
+    def update_admin_profile(db: Session, admin_id: int, profile_data: dict) -> Admin:
+        """Update admin profile"""
+        admin = db.query(Admin).filter(Admin.id == admin_id).first()
+        if not admin:
+            raise ValueError("Admin not found")
+        
+        # Check if email already exists for another admin
+        if 'email' in profile_data and profile_data['email'] != admin.email:
+            existing = db.query(Admin).filter(
+                Admin.email == profile_data['email'],
+                Admin.id != admin_id
+            ).first()
+            if existing:
+                raise ValueError("Email already in use by another admin")
+        
+        for key, value in profile_data.items():
+            if value is not None:
+                setattr(admin, key, value)
+        
+        admin.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(admin)
+        return admin
+
+    @staticmethod
+    def change_admin_password(db: Session, admin_id: int, current_password: str, new_password: str) -> Dict:
+        """Change admin password"""
+        admin = db.query(Admin).filter(Admin.id == admin_id).first()
+        if not admin:
+            raise ValueError("Admin not found")
+        
+        # Verify current password
+        if not verify_password(current_password, admin.password):
+            raise ValueError("Current password is incorrect")
+        
+        # Check if new password is same as old
+        if verify_password(new_password, admin.password):
+            raise ValueError("New password cannot be the same as current password")
+        
+        # Update password
+        admin.password = hash_password(new_password)
+        admin.updated_at = datetime.utcnow()
+        
+        # Revoke all refresh tokens for this admin (optional, for security)
+        from app.models.refresh_token import RefreshToken
+        # Note: You may need a separate refresh token table for admins
+        # or use the same table with a type filter
+        
+        db.commit()
+        
+        return {"message": "Password changed successfully"}
+
+    @staticmethod
+    def logout_admin(db: Session, admin_id: int, token: str) -> Dict:
+        """Logout admin by revoking token"""
+        # If you have a token blacklist or refresh token system
+        # You can revoke the specific token
+        from app.models.refresh_token import RefreshToken
+        
+        # Revoke the specific refresh token
+        token_record = db.query(RefreshToken).filter(
+            RefreshToken.token == token,
+            RefreshToken.user_id == admin_id,
+            RefreshToken.is_revoked == False
+        ).first()
+        
+        if token_record:
+            token_record.is_revoked = True
+            db.commit()
+            return {"message": "Logged out successfully"}
+        
+        return {"message": "Session already expired"}
+
+    @staticmethod
+    def logout_all_admin_sessions(db: Session, admin_id: int) -> Dict:
+        """Logout admin from all devices"""
+        from app.models.refresh_token import RefreshToken
+        
+        # Revoke all refresh tokens for this admin
+        db.query(RefreshToken).filter(
+            RefreshToken.user_id == admin_id,
+            RefreshToken.is_revoked == False
+        ).update({"is_revoked": True})
+        
+        db.commit()
+        return {"message": "Logged out from all devices successfully"}
 
 class RoleService:
     """Service for role management"""

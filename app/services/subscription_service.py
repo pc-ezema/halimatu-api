@@ -177,12 +177,11 @@ class SubscriptionService:
     def confirm_payment_and_activate_subscription(db: Session, tx_ref: str, user_id: int) -> Dict:
         """
         Verify payment and activate subscription (idempotent & safe)
-        Also fetches all courses and enrolls the user
+        Enrolls user only in courses assigned to the subscribed plan
         """
 
         try:
             # 🔒 Start transaction
-            # (SQLAlchemy uses implicit transaction, but we control commit/rollback)
 
             # 1. Fetch payment
             payment = db.query(Payment).filter(
@@ -196,9 +195,9 @@ class SubscriptionService:
             # 2. If already completed → check subscription
             if payment.status == PaymentStatus.COMPLETED:
                 if payment.subscription_id:
-                    # Get subscription and courses
                     subscription = db.query(Subscription).filter(Subscription.id == payment.subscription_id).first()
-                    courses = CourseService.get_courses(db, status="published")
+                    # Get courses for this plan
+                    courses = CourseService.get_courses_by_plan(db, subscription.plan_id, status="published")
                     
                     return {
                         "status": "success",
@@ -208,7 +207,6 @@ class SubscriptionService:
                         "available_courses": courses,
                         "total_courses": len(courses)
                     }
-                # ⚠️ If completed but no subscription → continue (recovery mode)
 
             # 3. Verify payment with Flutterwave
             verification = flutterwave.verify_payment(tx_ref)
@@ -231,7 +229,7 @@ class SubscriptionService:
             if not plan:
                 raise ValueError("Plan not found")
 
-            # 6. Prevent duplicate subscription (CRITICAL)
+            # 6. Prevent duplicate subscription
             existing_subscription = db.query(Subscription).filter(
                 Subscription.user_id == user_id,
                 Subscription.plan_id == plan.id,
@@ -239,13 +237,12 @@ class SubscriptionService:
             ).first()
 
             if existing_subscription:
-                # Link payment if not already linked
                 if not payment.subscription_id:
                     payment.subscription_id = existing_subscription.id
                     db.commit()
 
-                # Get courses for existing subscription
-                courses = CourseService.get_courses(db, status="published")
+                # Get courses for existing plan
+                courses = CourseService.get_courses_by_plan(db, plan.id, status="published")
                 
                 return {
                     "status": "success",
@@ -272,7 +269,7 @@ class SubscriptionService:
             )
 
             db.add(subscription)
-            db.flush()  # ✅ ensures subscription.id is available immediately
+            db.flush()
 
             # After subscription is created
             if subscription:
@@ -290,50 +287,48 @@ class SubscriptionService:
             # 9. Commit once to save subscription
             db.commit()
 
-            # 10. 🎓 ENROLL USER IN ALL COURSES (FREE COURSES)
+            # 10. 🎓 ENROLL USER ONLY IN COURSES ASSIGNED TO THIS PLAN
             enrolled_courses = []
             failed_courses = []
             
-            # Get all published courses
-            all_courses = CourseService.get_courses(db, status="published")
+            # Get courses assigned to this plan
+            plan_courses = CourseService.get_courses_by_plan(db, plan.id, status="published")
             
-            for course in all_courses:
+            for course in plan_courses:
                 try:
-                    # Check if course is free OR user has active subscription
-                    if course.price == 0 or subscription:
-                        # Check if already enrolled
-                        existing_enrollment = db.query(Enrollment).filter(
-                            Enrollment.user_id == user_id,
-                            Enrollment.course_id == course.id
-                        ).first()
-                        
-                        if not existing_enrollment:
-                            # Create enrollment
-                            enrollment = Enrollment(
-                                user_id=user_id,
-                                course_id=course.id,
-                                status=EnrollmentStatus.ACTIVE,
-                                progress=0.0
-                            )
-                            db.add(enrollment)
+                    # Check if already enrolled
+                    existing_enrollment = db.query(Enrollment).filter(
+                        Enrollment.user_id == user_id,
+                        Enrollment.course_id == course.id
+                    ).first()
+                    
+                    if not existing_enrollment:
+                        # Create enrollment
+                        enrollment = Enrollment(
+                            user_id=user_id,
+                            course_id=course.id,
+                            status=EnrollmentStatus.ACTIVE,
+                            progress=0.0
+                        )
+                        db.add(enrollment)
 
-                            # After successful enrollment
-                            from app.services.notification_service import NotificationService
-                            NotificationService.notify_enrollment_confirmation(
-                                db, user_id, course.title
-                            )
-                            
-                            enrolled_courses.append({
-                                "id": course.id,
-                                "title": course.title,
-                                "enrollment_status": "created"
-                            })
-                        else:
-                            enrolled_courses.append({
-                                "id": course.id,
-                                "title": course.title,
-                                "enrollment_status": "already_enrolled"
-                            })
+                        # Send enrollment notification
+                        from app.services.notification_service import NotificationService
+                        NotificationService.notify_enrollment_confirmation(
+                            db, user_id, course.title
+                        )
+                        
+                        enrolled_courses.append({
+                            "id": course.id,
+                            "title": course.title,
+                            "enrollment_status": "created"
+                        })
+                    else:
+                        enrolled_courses.append({
+                            "id": course.id,
+                            "title": course.title,
+                            "enrollment_status": "already_enrolled"
+                        })
                 except Exception as e:
                     failed_courses.append({
                         "id": course.id,
@@ -378,7 +373,7 @@ class SubscriptionService:
                     "sort_order": plan.sort_order
                 },
                 "enrollment_summary": {
-                    "total_courses_available": len(all_courses),
+                    "total_courses_in_plan": len(plan_courses),
                     "successfully_enrolled": len(enrolled_courses),
                     "failed_enrollments": len(failed_courses),
                     "enrolled_courses": enrolled_courses,
@@ -394,254 +389,14 @@ class SubscriptionService:
                         "image": course.image,
                         "status": course.status
                     }
-                    for course in all_courses
+                    for course in plan_courses
                 ]
             }
 
         except Exception as e:
             db.rollback()
             raise e
-    
-    @staticmethod
-    def confirm_payment_and_activate_subscription(db: Session, tx_ref: str, user_id: int) -> Dict:
-        """
-        Verify payment and activate subscription (idempotent & safe)
-        Also fetches all courses and enrolls the user
-        """
-        try:
-            print(f"DEBUG: Starting subscription activation for tx_ref: {tx_ref}, user_id: {user_id}")
-            
-            # 1. Fetch payment
-            payment = db.query(Payment).filter(
-                Payment.transaction_id == tx_ref,
-                Payment.user_id == user_id
-            ).first()
 
-            if not payment:
-                raise ValueError("Payment record not found")
-            
-            print(f"DEBUG: Payment found: {payment.id}, status: {payment.status}")
-
-            # 2. If already completed → check subscription
-            if payment.status == PaymentStatus.COMPLETED:
-                if payment.subscription_id:
-                    subscription = db.query(Subscription).filter(Subscription.id == payment.subscription_id).first()
-                    courses = CourseService.get_courses(db, status="published")
-                    
-                    return {
-                        "status": "success",
-                        "message": "Payment already confirmed",
-                        "subscription_id": payment.subscription_id,
-                        "subscription": subscription,
-                        "available_courses": courses,
-                        "total_courses": len(courses)
-                    }
-
-            # 3. Verify payment with Flutterwave
-            print(f"DEBUG: Verifying payment with Flutterwave...")
-            verification = flutterwave.verify_payment(tx_ref)
-
-            if verification.get("status") != "success":
-                return {
-                    "status": "failed",
-                    "message": "Payment verification failed",
-                    "details": verification
-                }
-            
-            print(f"DEBUG: Payment verified successfully")
-
-            # 4. Update payment
-            payment.status = PaymentStatus.COMPLETED
-            payment.paid_at = datetime.utcnow()
-            payment.payment_details = verification
-            payment.flutterwave_reference = verification.get("flw_ref")
-
-            # 5. Fetch plan
-            plan = db.query(Plan).filter(Plan.id == payment.plan_id).first()
-            if not plan:
-                raise ValueError("Plan not found")
-            
-            print(f"DEBUG: Plan found: {plan.name}")
-
-            # 6. Prevent duplicate subscription
-            existing_subscription = db.query(Subscription).filter(
-                Subscription.user_id == user_id,
-                Subscription.plan_id == plan.id,
-                Subscription.status == SubscriptionStatus.ACTIVE
-            ).first()
-
-            if existing_subscription:
-                if not payment.subscription_id:
-                    payment.subscription_id = existing_subscription.id
-                    db.commit()
-
-                courses = CourseService.get_courses(db, status="published")
-                
-                return {
-                    "status": "success",
-                    "message": "Active subscription already exists",
-                    "subscription_id": existing_subscription.subscription_id,
-                    "subscription": existing_subscription,
-                    "available_courses": courses,
-                    "total_courses": len(courses)
-                }
-
-            # 7. Create subscription
-            start_date = datetime.utcnow()
-            end_date = start_date + timedelta(days=plan.duration_months * 30)
-
-            print(f"DEBUG: Creating subscription...")
-            subscription = Subscription(
-                subscription_id=SubscriptionService.generate_subscription_id(),
-                user_id=user_id,
-                plan_id=plan.id,
-                amount_paid=payment.amount,
-                start_date=start_date,
-                end_date=end_date,
-                status=SubscriptionStatus.ACTIVE,
-                auto_renew=False
-            )
-
-            db.add(subscription)
-            db.flush()
-            print(f"DEBUG: Subscription created with id: {subscription.id}")
-
-            # After subscription is created
-            try:
-                from app.services.notification_service import NotificationService
-                print(f"DEBUG: Sending subscription activated notification...")
-                NotificationService.notify_subscription_activated(
-                    db, user_id, plan.name, subscription.end_date
-                )
-                NotificationService.notify_payment_success(
-                    db, user_id, payment.amount, plan.name
-                )
-                print(f"DEBUG: Notifications sent successfully")
-            except Exception as e:
-                print(f"DEBUG: Error sending notifications: {e}")
-                # Don't fail the subscription if notification fails
-
-            # 8. Link payment → subscription
-            payment.subscription_id = subscription.id
-
-            # 9. Commit once to save subscription
-            db.commit()
-            print(f"DEBUG: Subscription committed to database")
-
-            # 10. Enroll user in all courses
-            enrolled_courses = []
-            failed_courses = []
-            
-            all_courses = CourseService.get_courses(db, status="published")
-            print(f"DEBUG: Found {len(all_courses)} published courses")
-            
-            for course in all_courses:
-                try:
-                    if course.price == 0 or subscription:
-                        existing_enrollment = db.query(Enrollment).filter(
-                            Enrollment.user_id == user_id,
-                            Enrollment.course_id == course.id
-                        ).first()
-                        
-                        if not existing_enrollment:
-                            enrollment = Enrollment(
-                                user_id=user_id,
-                                course_id=course.id,
-                                status=EnrollmentStatus.ACTIVE,
-                                progress=0.0
-                            )
-                            db.add(enrollment)
-
-                            try:
-                                from app.services.notification_service import NotificationService
-                                NotificationService.notify_enrollment_confirmation(
-                                    db, user_id, course.title
-                                )
-                            except Exception as e:
-                                print(f"DEBUG: Error sending enrollment notification: {e}")
-                            
-                            enrolled_courses.append({
-                                "id": course.id,
-                                "title": course.title,
-                                "enrollment_status": "created"
-                            })
-                        else:
-                            enrolled_courses.append({
-                                "id": course.id,
-                                "title": course.title,
-                                "enrollment_status": "already_enrolled"
-                            })
-                except Exception as e:
-                    print(f"DEBUG: Error enrolling in course {course.id}: {e}")
-                    failed_courses.append({
-                        "id": course.id,
-                        "title": course.title,
-                        "error": str(e)
-                    })
-            
-            db.commit()
-            print(f"DEBUG: All enrollments committed")
-
-            db.refresh(subscription)
-            db.refresh(plan)
-
-            return {
-                "status": "success",
-                "message": f"Payment confirmed and subscription activated. Enrolled in {len(enrolled_courses)} courses.",
-                "subscription_id": subscription.subscription_id,
-                "subscription": {
-                    "id": subscription.id,
-                    "subscription_id": subscription.subscription_id,
-                    "user_id": subscription.user_id,
-                    "plan_id": subscription.plan_id,
-                    "amount_paid": subscription.amount_paid,
-                    "start_date": subscription.start_date.isoformat(),
-                    "end_date": subscription.end_date.isoformat(),
-                    "status": subscription.status.value,
-                    "auto_renew": subscription.auto_renew,
-                    "created_at": subscription.created_at.isoformat() if subscription.created_at else None
-                },
-                "plan": {
-                    "id": plan.id,
-                    "name": plan.name,
-                    "type": plan.type.value if hasattr(plan.type, 'value') else str(plan.type),
-                    "duration_months": plan.duration_months,
-                    "original_price": plan.original_price,
-                    "discounted_price": plan.discounted_price,
-                    "discount_percentage": plan.discount_percentage,
-                    "description": plan.description,
-                    "features": plan.features,
-                    "status": plan.status.value if hasattr(plan.status, 'value') else str(plan.status),
-                    "sort_order": plan.sort_order
-                },
-                "enrollment_summary": {
-                    "total_courses_available": len(all_courses),
-                    "successfully_enrolled": len(enrolled_courses),
-                    "failed_enrollments": len(failed_courses),
-                    "enrolled_courses": enrolled_courses,
-                    "failed_courses": failed_courses if failed_courses else None
-                },
-                "available_courses": [
-                    {
-                        "id": course.id,
-                        "title": course.title,
-                        "description": course.description,
-                        "price": course.price,
-                        "is_enrolled": any(e["id"] == course.id for e in enrolled_courses),
-                        "image": course.image,
-                        "status": course.status
-                    }
-                    for course in all_courses
-                ]
-            }
-
-        except Exception as e:
-            print(f"DEBUG: Fatal error in subscription activation: {e}")
-            import traceback
-            traceback.print_exc()
-            db.rollback()
-            raise e
-    
     @staticmethod
     def get_user_subscriptions(db: Session, user_id: int) -> List[Subscription]:
         """Get user's subscriptions"""

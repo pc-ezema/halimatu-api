@@ -36,13 +36,15 @@ class CourseService:
         return course
     
     @staticmethod
-    def get_courses(db: Session, skip: int = 0, limit: int = 100, status: str = None) -> List[Course]:
-        """Get all courses"""
+    def get_courses(db: Session, skip: int = 0, limit: int = 100, status: str = None, plan_id: int = None) -> List[Course]:
+        """Get all courses with optional filters"""
         query = db.query(Course)
         if status:
             query = query.filter(Course.status == status)
+        if plan_id:
+            query = query.filter(Course.plan_id == plan_id)
         return query.order_by(Course.created_at.desc()).offset(skip).limit(limit).all()
-    
+        
     @staticmethod
     def get_course(db: Session, course_id: int) -> Course:
         """Get course by ID"""
@@ -88,6 +90,73 @@ class CourseService:
         db.commit()
         return {"message": "Course deleted successfully"}
     
+    @staticmethod
+    def get_courses_by_plan(db: Session, plan_id: int, status: str = "published") -> List[Course]:
+        """Get all courses assigned to a specific plan"""
+        query = db.query(Course).filter(Course.plan_id == plan_id)
+        if status:
+            query = query.filter(Course.status == status)
+        return query.all()
+
+    @staticmethod
+    def enroll_existing_subscribers_to_course(db: Session, course_id: int, plan_id: int) -> int:
+        """
+        Enroll all active subscribers of a plan into a course
+        Returns number of users enrolled
+        """
+        from app.models.subscription import Subscription, SubscriptionStatus
+        from app.models.enrollment import Enrollment, EnrollmentStatus
+        
+        # Get all active subscribers for this plan
+        active_subscribers = db.query(Subscription).filter(
+            Subscription.plan_id == plan_id,
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.end_date > datetime.utcnow()
+        ).all()
+        
+        enrolled_count = 0
+        skipped_count = 0
+        
+        for subscription in active_subscribers:
+            user_id = subscription.user_id
+            
+            # Check if already enrolled
+            existing = db.query(Enrollment).filter(
+                Enrollment.user_id == user_id,
+                Enrollment.course_id == course_id
+            ).first()
+            
+            if not existing:
+                # Create enrollment
+                enrollment = Enrollment(
+                    user_id=user_id,
+                    course_id=course_id,
+                    status=EnrollmentStatus.ACTIVE,
+                    progress=0.0
+                )
+                db.add(enrollment)
+                enrolled_count += 1
+                
+                # Send notification to user
+                from app.services.notification_service import NotificationService
+                course = db.query(Course).filter(Course.id == course_id).first()
+                if course:
+                    NotificationService.create_notification(db, {
+                        "user_id": user_id,
+                        "title": "📚 New Course Added to Your Plan!",
+                        "message": f"A new course '{course.title}' has been added to your subscription plan. You now have access to it!",
+                        "type": "course",
+                        "action_url": f"/user/courses/{course_id}",
+                        "action_text": "View Course"
+                    })
+            else:
+                skipped_count += 1
+        
+        db.commit()
+        
+        print(f"Enrolled {enrolled_count} users, {skipped_count} already enrolled")
+        return enrolled_count
+
     # ==================== TOPIC CRUD ====================
     
     @staticmethod

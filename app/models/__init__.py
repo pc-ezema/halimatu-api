@@ -15,6 +15,8 @@ from .class_model import Class, ClassStatus
 from .enrollment import Enrollment, EnrollmentStatus
 from .contact import ContactMessage, ContactStatus
 from .private_tutor import PrivateTutorRequest, RequestStatus
+from .certificate import Certificate, CertificateStatus
+from .notification import Notification, NotificationType, NotificationStatus
 
 __all__ = [
     "User", "GenderEnum", "UserStatusEnum",

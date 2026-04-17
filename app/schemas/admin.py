@@ -4,6 +4,63 @@ from typing import Optional, List
 
 from sqlalchemy import String
 
+# Add these to your existing admin schemas
+
+class AdminProfileUpdate(BaseModel):
+    """Update admin profile"""
+    name: Optional[str] = Field(None, min_length=2, max_length=100)
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = Field(None, max_length=20)
+
+class AdminChangePassword(BaseModel):
+    """Change admin password"""
+    current_password: str = Field(..., min_length=1)
+    new_password: str = Field(..., min_length=8, max_length=128)
+    confirm_password: str = Field(..., min_length=8)
+    
+    @field_validator('new_password')
+    def validate_password(cls, v):
+        errors = []
+        
+        if len(v) < 8:
+            errors.append("at least 8 characters")
+        if len(v) > 128:
+            errors.append("no more than 128 characters")
+        if not any(c.isupper() for c in v):
+            errors.append("at least one uppercase letter")
+        if not any(c.islower() for c in v):
+            errors.append("at least one lowercase letter")
+        if not any(c.isdigit() for c in v):
+            errors.append("at least one number")
+        
+        if errors:
+            raise ValueError(f"Password must contain: {', '.join(errors)}")
+        
+        return v
+    
+    @field_validator('confirm_password')
+    def passwords_match(cls, v, info):
+        if 'new_password' in info.data and v != info.data['new_password']:
+            raise ValueError("Passwords do not match")
+        return v
+
+class AdminProfileResponse(BaseModel):
+    """Admin profile response"""
+    id: int
+    name: str
+    email: str
+    role: Optional[RoleResponse]
+    status: str
+    is_active: bool
+    last_login: Optional[datetime]
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class MessageResponse(BaseModel):
+    message: str
+    
 # Role Schemas
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=50)

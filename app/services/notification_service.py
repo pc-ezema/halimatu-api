@@ -10,7 +10,7 @@ class NotificationService:
     @staticmethod
     def generate_notification_id() -> str:
         """Generate unique notification ID"""
-        return str(uuid.uuid4()).hex[:12].upper()
+        return str(uuid.uuid4()).replace('-', '')[:12].upper()
     
     @staticmethod
     def create_notification(db: Session, notification_data: dict) -> Notification:

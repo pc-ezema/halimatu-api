@@ -83,6 +83,7 @@ class CourseCreate(BaseModel):
     image: Optional[str] = None
     duration_months: Optional[int] = None
     instructor: Optional[str] = None
+    plan_id: Optional[int] = None
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=3, max_length=200)
@@ -92,6 +93,7 @@ class CourseUpdate(BaseModel):
     image: Optional[str] = None
     duration_months: Optional[int] = None
     instructor: Optional[str] = None
+    plan_id: Optional[int] = None
 
 class CourseResponse(BaseModel):
     id: int

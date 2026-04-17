@@ -19,7 +19,12 @@ class Course(Base):
     status = Column(Enum(CourseStatus), default=CourseStatus.DRAFT)
     image = Column(String(500), nullable=True)
     instructor = Column(String(100), nullable=True)
-    duration_months = Column(Integer, nullable=True)  # Duration in minutes
+    duration_months = Column(Integer, nullable=True)
+    
+    # Plan relationship (many-to-one)
+    plan_id = Column(Integer, ForeignKey("plans.id", ondelete="SET NULL"), nullable=True)
+    plan = relationship("Plan", back_populates="courses")
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     

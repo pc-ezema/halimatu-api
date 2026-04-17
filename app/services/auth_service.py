@@ -10,6 +10,7 @@ from app.models.refresh_token import RefreshToken
 from app.config.settings import settings
 from app.services.otp_service import generate_otp  # Changed import
 from app.utils.student_id_generator import StudentIDGenerator
+from app.services.notification_service import NotificationService
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -110,7 +111,6 @@ def register_user(db: Session, user_data: dict) -> User:
     db.commit()
     db.refresh(user)
 
-    from app.services.notification_service import NotificationService
     NotificationService.notify_welcome(db, user.id, user.get_full_name())
     
     return user

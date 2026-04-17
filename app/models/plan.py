@@ -34,6 +34,7 @@ class Plan(Base):
     # Relationships
     subscriptions = relationship("Subscription", back_populates="plan", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="plan", cascade="all, delete-orphan")
+    courses = relationship("Course", back_populates="plan", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Plan {self.name} - ₦{self.discounted_price}>"

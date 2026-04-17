@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from typing import List
+from typing import Dict, List
 
 from app.database.database import get_db
 from app.schemas.admin import *
@@ -150,6 +150,89 @@ def admin_login(
         )
     }
 
+# ==================== ADMIN PROFILE MANAGEMENT ====================
+@router.put("/profile/me", response_model=AdminProfileResponse)
+@admin_route("admin_profile_update")
+def update_admin_profile(
+    request: Request,
+    data: AdminProfileUpdate,
+    admin: Admin = Depends(require_permission("admin_profile_update")),
+    db: Session = Depends(get_db),
+):
+    """Update current admin profile"""
+    try:
+        updated_admin = AdminUserService.update_admin_profile(
+            db, admin.id, data.model_dump(exclude_unset=True)
+        )
+        
+        return AdminProfileResponse(
+            id=updated_admin.id,
+            name=updated_admin.name,
+            email=updated_admin.email,
+            role=RoleResponse(
+                id=updated_admin.role.id,
+                name=updated_admin.role.name,
+                created_at=updated_admin.role.created_at,
+                updated_at=updated_admin.role.updated_at
+            ) if updated_admin.role else None,
+            status=updated_admin.status,
+            is_active=updated_admin.is_active,
+            last_login=updated_admin.last_login,
+            created_at=updated_admin.created_at
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/profile/change-password", response_model=MessageResponse)
+@admin_route("admin_profile_change_password")
+def change_admin_password(
+    request: Request,
+    data: AdminChangePassword,
+    admin: Admin = Depends(require_permission("admin_profile_change_password")),
+    db: Session = Depends(get_db),
+):
+    """Change current admin password"""
+    try:
+        result = AdminUserService.change_admin_password(
+            db, admin.id, data.current_password, data.new_password
+        )
+        return MessageResponse(message=result["message"])
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/logout", response_model=MessageResponse)
+def admin_logout(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    admin: Admin = Depends(require_permission("admin_profile")),
+    db: Session = Depends(get_db),
+):
+    """Logout current admin session"""
+    try:
+        token = credentials.credentials
+        result = AdminUserService.logout_admin(db, admin.id, token)
+        return MessageResponse(message=result["message"])
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.post("/logout-all", response_model=MessageResponse)
+@admin_route("admin_profile")
+def logout_all_sessions(
+    request: Request,
+    admin: Admin = Depends(require_permission("admin_profile")),
+    db: Session = Depends(get_db),
+):
+    """Logout from all devices"""
+    try:
+        result = AdminUserService.logout_all_admin_sessions(db, admin.id)
+        return MessageResponse(message=result["message"])
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+    
 # ==================== ROLE MANAGEMENT ====================
 @router.post("/roles", response_model=RoleResponse)
 @admin_route("roles_create")
@@ -347,8 +430,16 @@ def get_admins(
     admin: Admin = Depends(require_permission("admins")),
     db: Session = Depends(get_db),
 ):
-    """Get all admins"""
+    """Get all admins (excluding superadmin)"""
     admins = AdminUserService.get_admins(db, skip, limit)
+    
+    # Filter out superadmin
+    filtered_admins = []
+    for admin_user in admins:
+        # Check if role exists and is not superadmin
+        if admin_user.role and admin_user.role.name != "superadmin":
+            filtered_admins.append(admin_user)
+    
     return [
         AdminResponse(
             id=admin_user.id,
@@ -364,7 +455,7 @@ def get_admins(
             last_login=admin_user.last_login,
             created_at=admin_user.created_at
         )
-        for admin_user in admins
+        for admin_user in filtered_admins
     ]
 
 @router.get("/admins/me", response_model=AdminResponse)
@@ -392,6 +483,7 @@ def get_current_admin_profile(
         last_login=admin.last_login,
         created_at=admin.created_at
     )
+
 @router.get("/admins/{admin_id}", response_model=AdminResponse)
 @admin_route("admins_read")
 def get_admin(
@@ -1083,6 +1175,55 @@ def delete_course(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
+@router.put("/courses/{course_id}/assign-plan", response_model=CourseResponse)
+@admin_route("courses_assign_plan")
+def assign_course_to_plan(
+    request: Request,
+    course_id: int,
+    plan_id: int,
+    admin: Admin = Depends(require_permission("courses_assign_plan")),
+    db: Session = Depends(get_db),
+):
+    """Assign a course to a subscription plan and enroll existing subscribers"""
+    try:
+        course = CourseService.get_course(db, course_id)
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        # Store old plan_id to check if this is a new assignment
+        old_plan_id = course.plan_id
+        
+        # Assign course to plan
+        course.plan_id = plan_id
+        db.commit()
+        db.refresh(course)
+        
+        # If this is a new assignment (not just updating), enroll existing subscribers
+        enrolled_count = 0
+        if old_plan_id != plan_id:
+            enrolled_count = CourseService.enroll_existing_subscribers_to_course(db, course.id, plan_id)
+        
+        return {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "price": course.price,
+            "status": course.status,
+            "image": course.image,
+            "instructor": course.instructor,
+            "duration_months": course.duration_months,
+            "plan_id": course.plan_id,
+            "created_at": course.created_at,
+            "updated_at": course.updated_at,
+            "enrolled_existing_subscribers": enrolled_count
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 # ==================== TOPIC MANAGEMENT ====================
 
 @router.post("/courses/{course_id}/topics", response_model=TopicResponse)
