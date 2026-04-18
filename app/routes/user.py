@@ -325,14 +325,6 @@ def get_plans(
         token = credentials.credentials
         user = get_current_user(db, token)
         
-        # Check if there are any published courses
-        from app.services.course_service import CourseService
-        available_courses = CourseService.get_courses(db, status="published")
-        
-        # If no courses available, return empty list with message
-        if not available_courses:
-            return []  # Return empty list, frontend can show "No courses available"
-        
         # Get all active plans
         plans = SubscriptionService.get_plans(db, include_inactive=False)
         
