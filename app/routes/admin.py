@@ -1942,7 +1942,7 @@ def get_tutor_requests_stats(
 ):
     """Get tutor request statistics"""
     try:
-        stats = PublicService.get_stats(db)
+        stats = PublicService.get_request_stats(db)
         return stats
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

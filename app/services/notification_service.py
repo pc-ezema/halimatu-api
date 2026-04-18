@@ -99,7 +99,7 @@ class NotificationService:
         """Send notification when user completes a course"""
         notification_data = {
             "user_id": user_id,
-            "title": "🎉 Course Completed!",
+            "title": "Course Completed!",
             "message": f"Congratulations! You have successfully completed '{course_title}'. Your certificate is ready.",
             "type": NotificationType.COURSE,
             "action_url": f"/user/courses/{enrollment_id}",
@@ -112,7 +112,7 @@ class NotificationService:
         """Send notification when certificate is issued"""
         notification_data = {
             "user_id": user_id,
-            "title": "📜 Certificate Issued!",
+            "title": "Certificate Issued!",
             "message": f"Your certificate for '{course_title}' has been issued. Certificate number: {certificate_number}",
             "type": NotificationType.CERTIFICATE,
             "action_url": "/user/my-certificates",
@@ -125,7 +125,7 @@ class NotificationService:
         """Send notification when subscription is activated"""
         notification_data = {
             "user_id": user_id,
-            "title": "✅ Subscription Activated",
+            "title": "Subscription Activated",
             "message": f"Your {plan_name} subscription has been activated. It will expire on {end_date.strftime('%Y-%m-%d')}.",
             "type": NotificationType.SUBSCRIPTION,
             "action_url": "/user/my-subscriptions",
@@ -138,7 +138,7 @@ class NotificationService:
         """Send notification when subscription is about to expire"""
         notification_data = {
             "user_id": user_id,
-            "title": "⚠️ Subscription Expiring Soon",
+            "title": "Subscription Expiring Soon",
             "message": f"Your {plan_name} subscription will expire in {days_left} days. Renew now to continue accessing courses.",
             "type": NotificationType.SUBSCRIPTION,
             "action_url": "/user/subscription/plans",
@@ -151,7 +151,7 @@ class NotificationService:
         """Send notification when payment is successful"""
         notification_data = {
             "user_id": user_id,
-            "title": "💰 Payment Successful",
+            "title": "Payment Successful",
             "message": f"Your payment of ₦{amount:,.2f} for {plan_name} was successful.",
             "type": NotificationType.PAYMENT,
             "action_url": "/user/my-subscriptions",
@@ -164,7 +164,7 @@ class NotificationService:
         """Send notification when user enrolls in a course"""
         notification_data = {
             "user_id": user_id,
-            "title": "🎓 Enrollment Confirmed",
+            "title": "Enrollment Confirmed",
             "message": f"You have successfully enrolled in '{course_title}'. Start learning today!",
             "type": NotificationType.COURSE,
             "action_url": "/user/my-enrollments",
@@ -177,7 +177,7 @@ class NotificationService:
         """Send welcome notification to new users"""
         notification_data = {
             "user_id": user_id,
-            "title": "👋 Welcome to Halimatu!",
+            "title": "Welcome to Halimatu!",
             "message": f"Welcome {user_name}! We're excited to have you. Start exploring our courses today.",
             "type": NotificationType.SYSTEM,
             "action_url": "/user/courses",

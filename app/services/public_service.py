@@ -88,7 +88,7 @@ class PublicService:
         return {"message": "Request deleted successfully"}
     
     @staticmethod
-    def get_stats(db: Session) -> Dict:
+    def get_request_stats(db: Session) -> Dict:
         """Get request statistics"""
         total = db.query(PrivateTutorRequest).count()
         pending = db.query(PrivateTutorRequest).filter(PrivateTutorRequest.status == RequestStatus.PENDING).count()

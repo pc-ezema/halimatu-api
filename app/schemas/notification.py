@@ -66,3 +66,13 @@ class MarkReadRequest(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+
+class NotificationListResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    notifications: List[NotificationResponse]
+
+    class Config:
+        from_attributes = True

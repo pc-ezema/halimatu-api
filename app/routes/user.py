@@ -1,4 +1,5 @@
 from ast import List
+from pyclbr import Class
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -20,16 +21,18 @@ from app.models.subscription import Subscription
 from typing import List
 
 from app.schemas.course import (
-    CourseResponse, CourseDetailResponse, 
+    ClassResponse, CourseResponse, CourseDetailResponse, 
     EnrollmentResponse, MarkClassCompleteRequest, MarkTopicCompleteRequest, UpdateProgressRequest,
     MessageResponse
 )
 from app.services.course_service import CourseService
-from app.models.enrollment import Enrollment
+from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.schemas.certificate import CertificateResponse
 from app.services.certificate_service import CertificateService
 from app.schemas.notification import *
 from app.services.notification_service import NotificationService
+from app.models.class_model import ClassStatus
+from app.models.topic import Topic
 
 
 router = APIRouter(prefix="/api/user", tags=["User"])
@@ -1066,7 +1069,7 @@ def get_my_certificate(
 
 # ==================== NOTIFICATION MANAGEMENT ====================
 
-@router.get("/notifications", response_model=dict)
+@router.get("/notifications", response_model=NotificationListResponse)
 @limiter.limit("30/minute")
 def get_my_notifications(
     request: Request,
@@ -1084,8 +1087,9 @@ def get_my_notifications(
         result = NotificationService.get_user_notifications(
             db, user.id, skip, limit, status
         )
-        return result
         
+        return result
+            
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     except Exception as e:
@@ -1180,6 +1184,63 @@ def delete_all_notifications(
         count = NotificationService.delete_all_notifications(db, user.id)
         
         return MessageResponse(message=f"{count} notification(s) deleted")
+        
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+@router.get("/upcoming-classes", response_model=List[ClassResponse])
+@limiter.limit("30/minute")
+def get_my_upcoming_classes(
+    request: Request,
+    limit: int = 10,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db),
+):
+    """Get upcoming classes for courses the user is enrolled in"""
+    try:
+        token = credentials.credentials
+        user = get_current_user(db, token)
+        
+        # Get user's enrolled courses
+        enrollments = db.query(Enrollment).filter(
+            Enrollment.user_id == user.id,
+            Enrollment.status == EnrollmentStatus.ACTIVE
+        ).all()
+        
+        course_ids = [e.course_id for e in enrollments]
+        
+        if not course_ids:
+            return []
+        
+        # Get upcoming classes from those courses
+        upcoming_classes = db.query(Class).join(Topic).filter(
+            Topic.course_id.in_(course_ids),
+            Class.start_date > datetime.utcnow(),
+            Class.status == ClassStatus.SCHEDULED
+        ).order_by(Class.start_date.asc()).limit(limit).all()
+        
+        result = []
+        for cls in upcoming_classes:
+            result.append({
+                "id": cls.id,
+                "class_id": cls.class_id,
+                "name": cls.name,
+                "description": cls.description,
+                "meeting_link": cls.meeting_link,
+                "meeting_password": cls.meeting_password,
+                "start_date": cls.start_date,
+                "end_date": cls.end_date,
+                "status": cls.status,
+                "topic_id": cls.topic_id,
+                "topic_title": cls.topic.title,
+                "course_id": cls.topic.course_id,
+                "course_title": cls.topic.course.title,
+                "created_at": cls.created_at
+            })
+        
+        return result
         
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
