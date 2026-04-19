@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, 
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.database import Base
+from app.models.course import course_plan
 import enum
 
 class PlanType(str, enum.Enum):
@@ -34,7 +35,9 @@ class Plan(Base):
     # Relationships
     subscriptions = relationship("Subscription", back_populates="plan", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="plan", cascade="all, delete-orphan")
-    courses = relationship("Course", back_populates="plan", cascade="all, delete-orphan")
+
+    # Many-to-many relationship with courses
+    courses = relationship("Course", secondary=course_plan, back_populates="plans")
 
     def __repr__(self):
         return f"<Plan {self.name} - ₦{self.discounted_price}>"

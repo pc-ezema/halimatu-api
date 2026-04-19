@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import Optional, List
 from enum import Enum
 
+from app.schemas.subscription import PlanResponse
+
 class CourseStatus(str, Enum):
     DRAFT = "draft"
     PUBLISHED = "published"
@@ -83,7 +85,7 @@ class CourseCreate(BaseModel):
     image: Optional[str] = None
     duration_months: Optional[int] = None
     instructor: Optional[str] = None
-    plan_id: Optional[int] = None
+    plan_ids: Optional[List[int]] = []
 
 class CourseUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=3, max_length=200)
@@ -93,7 +95,7 @@ class CourseUpdate(BaseModel):
     image: Optional[str] = None
     duration_months: Optional[int] = None
     instructor: Optional[str] = None
-    plan_id: Optional[int] = None
+    plan_ids: Optional[List[int]] = None
 
 class CourseResponse(BaseModel):
     id: int
@@ -107,6 +109,7 @@ class CourseResponse(BaseModel):
     total_topics: int = 0
     total_enrolled: int = 0
     total_classes: int = 0
+    plans: List[PlanResponse] = []
     is_enrolled: bool = False
     created_at: datetime
     updated_at: datetime

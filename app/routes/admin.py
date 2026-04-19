@@ -1175,34 +1175,49 @@ def delete_course(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-@router.put("/courses/{course_id}/assign-plan", response_model=CourseResponse)
-@admin_route("courses_assign_plan")
-def assign_course_to_plan(
+@router.post("/courses/{course_id}/assign-plans", response_model=CourseResponse)
+@admin_route("courses_assign_plans")
+def assign_plans_to_course(
     request: Request,
     course_id: int,
-    plan_id: int,
-    admin: Admin = Depends(require_permission("courses_assign_plan")),
+    plan_ids: List[int],
+    admin: Admin = Depends(require_permission("courses_assign_plans")),
     db: Session = Depends(get_db),
 ):
-    """Assign a course to a subscription plan and enroll existing subscribers"""
+    """Assign multiple plans to a course and enroll existing subscribers"""
     try:
         course = CourseService.get_course(db, course_id)
-        plan = db.query(Plan).filter(Plan.id == plan_id).first()
-        if not plan:
-            raise HTTPException(status_code=404, detail="Plan not found")
         
-        # Store old plan_id to check if this is a new assignment
-        old_plan_id = course.plan_id
+        # Get old plan IDs to detect new assignments
+        old_plan_ids = set([p.id for p in course.plans])
+        new_plan_ids = set(plan_ids)
         
-        # Assign course to plan
-        course.plan_id = plan_id
+        # Find plans to add and remove
+        plans_to_add = new_plan_ids - old_plan_ids
+        plans_to_remove = old_plan_ids - new_plan_ids
+        
+        # Assign new plans
+        plans = db.query(Plan).filter(Plan.id.in_(plan_ids)).all()
+        course.plans = plans
         db.commit()
         db.refresh(course)
         
-        # If this is a new assignment (not just updating), enroll existing subscribers
-        enrolled_count = 0
-        if old_plan_id != plan_id:
-            enrolled_count = CourseService.enroll_existing_subscribers_to_course(db, course.id, plan_id)
+        # Enroll subscribers of newly added plans
+        total_enrolled = 0
+        enrollment_details = []
+        
+        for plan_id in plans_to_add:
+            enrolled = CourseService.enroll_existing_subscribers_to_course(db, course.id, plan_id)
+            total_enrolled += enrolled
+            plan = db.query(Plan).filter(Plan.id == plan_id).first()
+            enrollment_details.append({
+                "plan_id": plan_id,
+                "plan_name": plan.name if plan else "Unknown",
+                "enrolled_count": enrolled
+            })
+        
+        # Note: When removing plans, existing enrollments are NOT removed
+        # Users keep access to courses they already started
         
         return {
             "id": course.id,
@@ -1213,14 +1228,139 @@ def assign_course_to_plan(
             "image": course.image,
             "instructor": course.instructor,
             "duration_months": course.duration_months,
-            "plan_id": course.plan_id,
+            "plans": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "type": p.type.value if hasattr(p.type, 'value') else str(p.type)
+                }
+                for p in course.plans
+            ],
+            "created_at": course.created_at,
+            "updated_at": course.updated_at,
+            "plans_added": list(plans_to_add),
+            "plans_removed": list(plans_to_remove),
+            "enrollment_summary": {
+                "total_enrolled": total_enrolled,
+                "details": enrollment_details
+            }
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/courses/{course_id}/add-plan", response_model=CourseResponse)
+@admin_route("courses_assign_plans")
+def add_plan_to_course(
+    request: Request,
+    course_id: int,
+    plan_id: int,
+    admin: Admin = Depends(require_permission("courses_assign_plans")),
+    db: Session = Depends(get_db),
+):
+    """Add a single plan to a course"""
+    try:
+        course = CourseService.get_course(db, course_id)
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        # Check if plan already assigned
+        if plan in course.plans:
+            raise HTTPException(status_code=400, detail="Plan already assigned to this course")
+        
+        # Add plan to course
+        course.plans.append(plan)
+        db.commit()
+        db.refresh(course)
+        
+        # Enroll existing subscribers
+        enrolled_count = CourseService.enroll_existing_subscribers_to_course(db, course.id, plan_id)
+        
+        return {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "price": course.price,
+            "status": course.status,
+            "image": course.image,
+            "instructor": course.instructor,
+            "duration_months": course.duration_months,
+            "plans": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "type": p.type.value if hasattr(p.type, 'value') else str(p.type),
+                    "description": p.description,
+                    "duration_months": p.duration_months,
+                    "original_price": p.original_price,
+                    "discounted_price": p.discounted_price,
+                    "discount_percentage": p.discount_percentage,
+                    "features": p.features,
+                    "status": p.status,
+                    "sort_order": p.sort_order,
+                    "created_at": p.created_at,
+                }
+                for p in course.plans
+            ],
             "created_at": course.created_at,
             "updated_at": course.updated_at,
             "enrolled_existing_subscribers": enrolled_count
         }
         
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/courses/{course_id}/remove-plan/{plan_id}", response_model=CourseResponse)
+@admin_route("courses_assign_plans")
+def remove_plan_from_course(
+    request: Request,
+    course_id: int,
+    plan_id: int,
+    admin: Admin = Depends(require_permission("courses_assign_plans")),
+    db: Session = Depends(get_db),
+):
+    """Remove a plan from a course (does NOT unenroll existing users)"""
+    try:
+        course = CourseService.get_course(db, course_id)
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        # Remove plan from course
+        if plan in course.plans:
+            course.plans.remove(plan)
+            db.commit()
+            db.refresh(course)
+        
+        return {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "price": course.price,
+            "status": course.status,
+            "image": course.image,
+            "instructor": course.instructor,
+            "duration_months": course.duration_months,
+            "plans": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "type": p.type.value if hasattr(p.type, 'value') else str(p.type)
+                }
+                for p in course.plans
+            ],
+            "created_at": course.created_at,
+            "updated_at": course.updated_at,
+            "message": f"Plan '{plan.name}' removed from course. Existing enrollments remain active."
+        }
+        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     

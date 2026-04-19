@@ -10,7 +10,8 @@ from app.models.enrollment import Enrollment, EnrollmentStatus
 from app.models.user import User
 from app.utils.image_upload import ImageUpload
 from app.models.topic_progress import TopicProgress
-from app.models.class_progress import ClassProgress  # Keep for tracking individual class completion
+from app.models.class_progress import ClassProgress
+from app.models.plan import Plan  # Keep for tracking individual class completion
 
 
 class CourseService:
@@ -92,20 +93,39 @@ class CourseService:
     
     @staticmethod
     def get_courses_by_plan(db: Session, plan_id: int, status: str = "published") -> List[Course]:
-        """Get all courses assigned to a specific plan"""
-        query = db.query(Course).filter(Course.plan_id == plan_id)
+        """Get all courses assigned to a specific plan (many-to-many)"""
+        plan = db.query(Plan).filter(Plan.id == plan_id).first()
+        if not plan:
+            return []
+        
+        courses = plan.courses  # This uses the many-to-many relationship
+        
         if status:
-            query = query.filter(Course.status == status)
-        return query.all()
+            courses = [c for c in courses if c.status.value == status or c.status == status]
+        
+        return courses
 
     @staticmethod
     def enroll_existing_subscribers_to_course(db: Session, course_id: int, plan_id: int) -> int:
         """
         Enroll all active subscribers of a plan into a course
+        Used when a new course is added to an existing plan
         Returns number of users enrolled
         """
         from app.models.subscription import Subscription, SubscriptionStatus
         from app.models.enrollment import Enrollment, EnrollmentStatus
+        from app.models.course import Course, CourseStatus
+        
+        # Get the course
+        course = db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            print(f"Course {course_id} not found")
+            return 0
+        
+        # Only enroll in published courses
+        if course.status != CourseStatus.PUBLISHED:
+            print(f"Course {course.title} is not published, skipping enrollment")
+            return 0
         
         # Get all active subscribers for this plan
         active_subscribers = db.query(Subscription).filter(
@@ -115,7 +135,7 @@ class CourseService:
         ).all()
         
         enrolled_count = 0
-        skipped_count = 0
+        already_enrolled_count = 0
         
         for subscription in active_subscribers:
             user_id = subscription.user_id
@@ -139,24 +159,21 @@ class CourseService:
                 
                 # Send notification to user
                 from app.services.notification_service import NotificationService
-                course = db.query(Course).filter(Course.id == course_id).first()
-                if course:
-                    NotificationService.create_notification(db, {
-                        "user_id": user_id,
-                        "title": "📚 New Course Added to Your Plan!",
-                        "message": f"A new course '{course.title}' has been added to your subscription plan. You now have access to it!",
-                        "type": "course",
-                        "action_url": f"/user/courses/{course_id}",
-                        "action_text": "View Course"
-                    })
+                NotificationService.create_notification(db, {
+                    "user_id": user_id,
+                    "title": "New Course Added to Your Plan!",
+                    "message": f"A new course '{course.title}' has been added to your '{subscription.plan.name}' subscription plan. You now have access to it!",
+                    "type": "course",
+                    "action_url": f"/user/courses/{course_id}",
+                    "action_text": "Start Learning"
+                })
             else:
-                skipped_count += 1
+                already_enrolled_count += 1
         
         db.commit()
         
-        print(f"Enrolled {enrolled_count} users, {skipped_count} already enrolled")
+        print(f"Course '{course.title}' - Enrolled {enrolled_count} new users, {already_enrolled_count} already enrolled")
         return enrolled_count
-
     # ==================== TOPIC CRUD ====================
     
     @staticmethod

@@ -1,8 +1,16 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Table, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database.database import Base
 import enum
+
+# Association table for many-to-many relationship between courses and plans
+course_plan = Table(
+    'course_plan',
+    Base.metadata,
+    Column('course_id', Integer, ForeignKey('courses.id', ondelete='CASCADE'), primary_key=True),
+    Column('plan_id', Integer, ForeignKey('plans.id', ondelete='CASCADE'), primary_key=True)
+)
 
 class CourseStatus(str, enum.Enum):
     DRAFT = "draft"
@@ -21,10 +29,6 @@ class Course(Base):
     instructor = Column(String(100), nullable=True)
     duration_months = Column(Integer, nullable=True)
     
-    # Plan relationship (many-to-one)
-    plan_id = Column(Integer, ForeignKey("plans.id", ondelete="SET NULL"), nullable=True)
-    plan = relationship("Plan", back_populates="courses")
-    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -32,6 +36,9 @@ class Course(Base):
     topics = relationship("Topic", back_populates="course", cascade="all, delete-orphan")
     enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
     certificates = relationship("Certificate", back_populates="course", cascade="all, delete-orphan")
+
+    # Many-to-many relationship with plans
+    plans = relationship("Plan", secondary=course_plan, back_populates="courses")
 
     def __repr__(self):
         return f"<Course {self.title}>"

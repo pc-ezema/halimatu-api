@@ -752,7 +752,7 @@ def get_available_courses(
                 "title": course.title,
                 "description": course.description,
                 "price": course.price,
-                "status": course.status.value if hasattr(course.status, 'value') else str(course.status),  # Add status
+                "status": course.status.value if hasattr(course.status, 'value') else str(course.status),
                 "image": course.image,
                 "duration_months": getattr(course, 'duration_months', 0),
                 "instructor": getattr(course, 'instructor', None),
@@ -760,6 +760,23 @@ def get_available_courses(
                 "total_enrolled": course.total_students if hasattr(course, 'total_students') else 0,
                 "total_classes": sum(len(t.classes) for t in course.topics),
                 "is_enrolled": enrollment is not None,
+                "plans": [
+                    {
+                        "id": p.id,
+                        "name": p.name,
+                        "type": p.type.value if hasattr(p.type, 'value') else str(p.type),
+                        "description": p.description,
+                        "duration_months": p.duration_months,
+                        "original_price": p.original_price,
+                        "discounted_price": p.discounted_price,
+                        "discount_percentage": p.discount_percentage,
+                        "features": p.features,
+                        "status": p.status,
+                        "sort_order": p.sort_order,
+                        "created_at": p.created_at,
+                    }
+                    for p in course.plans
+                ],
                 "created_at": course.created_at,
                 "updated_at": course.updated_at
             })
