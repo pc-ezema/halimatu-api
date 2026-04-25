@@ -42,11 +42,11 @@ def seed_admin_database():
         # ==================== CREATE SUPERADMIN USER ====================
         print("\n👤 Creating superadmin user...")
         
-        superadmin = db.query(Admin).filter(Admin.email == "superadmin@halimatu.com").first()
+        superadmin = db.query(Admin).filter(Admin.email == "admin@halimatu-sadiyyah.com.ng").first()
         if not superadmin:
             superadmin = Admin(
                 name="Super Admin",
-                email="superadmin@halimatu.com",
+                email="admin@halimatu-sadiyyah.com.ng",
                 password=hash_password("SuperAdmin123!"),
                 role_id=superadmin_role.id,
                 status="active"
@@ -55,7 +55,7 @@ def seed_admin_database():
             db.commit()
             print("  ✓ Superadmin user created")
             print("\n📋 Login Credentials:")
-            print("  Email: superadmin@halimatu.com")
+            print("  Email: admin@halimatu-sadiyyah.com.ng")
             print("  Password: SuperAdmin123!")
         else:
             print("  ⚠️  Superadmin user already exists")
