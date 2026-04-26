@@ -49,7 +49,7 @@ class Settings(BaseSettings):
     flutterwave_encryption_key: str
     flutterwave_webhook_secret: str
     flutterwave_production: bool = False  # False for sandbox, True for production
-    frontend_url: str = "http://localhost:3000"
+    frontend_url: str = "https://halimatu-sadiyyah.com.ng"
 
     admin_email: str
 
