@@ -6,7 +6,7 @@ from app.config.settings import settings
 
 def send_otp_email(email: str, otp_code: str):
     """Send OTP verification email - Gmail compatible"""
-    subject = "Verify Your Email Address - {settings.app_name}"
+    subject = "Verify Your Email Address - HALĪMATU SA'DIYYAH ISlamic Academy"
     current_year = datetime.now().year
 
     body = f"""
@@ -135,7 +135,7 @@ def send_otp_email(email: str, otp_code: str):
 
 def send_password_reset_email(email: str, new_password: str):
     """Send password reset email with new password - Gmail compatible"""
-    subject = "Your Password Has Been Reset - {settings.app_name}"
+    subject = "Your Password Has Been Reset - HALĪMATU SA'DIYYAH ISlamic Academy"
     current_year = datetime.now().year
 
     body = f"""
