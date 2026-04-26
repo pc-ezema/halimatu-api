@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "HALĪMATU SA'DIYYAH ISlamic Academy"
     debug: bool = False
     base_url: str
-
+    
     # Security
     secret_key: str
     algorithm: str = "HS256"

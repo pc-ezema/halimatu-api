@@ -387,7 +387,7 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="{settings.base_url}/login" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Login to Your Account →</a>
+                                <a href="{settings.frontend_url}/login" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Login to Your Account →</a>
                             </td>
                         </tr>
                     </table>
@@ -493,7 +493,7 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="{settings.base_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                                <a href="{settings.frontend_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
                             </td>
                         </tr>
                     </table>
@@ -566,7 +566,7 @@ def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="{settings.base_url}/admin/tutor-requests" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Requests →</a>
+                                <a href="{settings.frontend_url}/admin/tutor-requests" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Requests →</a>
                             </td>
                         </tr>
                     </table>
@@ -651,7 +651,7 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="{settings.base_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                                <a href="{settings.frontend_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
                             </td>
                         </tr>
                     </table>
@@ -723,7 +723,7 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="{settings.base_url}/admin/contact-messages" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Messages →</a>
+                                <a href="{settings.frontend_url}/admin/contact-messages" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Messages →</a>
                             </td>
                         </tr>
                     </table>
