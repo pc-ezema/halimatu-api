@@ -6,7 +6,7 @@ from app.config.settings import settings
 
 def send_otp_email(email: str, otp_code: str):
     """Send OTP verification email - Gmail compatible"""
-    subject = "Verify Your Email Address - Halimatu"
+    subject = "Verify Your Email Address - {settings.app_name}"
     current_year = datetime.now().year
 
     body = f"""
@@ -23,9 +23,9 @@ def send_otp_email(email: str, otp_code: str):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -35,7 +35,7 @@ def send_otp_email(email: str, otp_code: str):
                     <h2 style="font-size:24px; font-weight:600; color:#1a1a1a; margin-bottom:15px; text-align:center;">Welcome! 🎉</h2>
                     
                     <p style="font-size:16px; color:#4a5568; margin-bottom:30px; text-align:center;">
-                        Thanks for joining Halimatu LMS. Please verify your email address to get started.
+                        Thanks for joining {settings.app_name}. Please verify your email address to get started.
                     </p>
                     
                     <!-- OTP Box -->
@@ -103,8 +103,8 @@ def send_otp_email(email: str, otp_code: str):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>If you didn't create this account, please ignore this email.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>If you didn't create this account, please ignore this email.</div>
                 </td>
             </tr>
         </table>
@@ -135,7 +135,7 @@ def send_otp_email(email: str, otp_code: str):
 
 def send_password_reset_email(email: str, new_password: str):
     """Send password reset email with new password - Gmail compatible"""
-    subject = "Your Password Has Been Reset - Halimatu"
+    subject = "Your Password Has Been Reset - {settings.app_name}"
     current_year = datetime.now().year
 
     body = f"""
@@ -152,9 +152,9 @@ def send_password_reset_email(email: str, new_password: str):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="HALĪMATU SA'DIYYAH ISlamic Academy" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -196,8 +196,8 @@ def send_password_reset_email(email: str, new_password: str):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>This is an automated message, please do not reply.</div>
                 </td>
             </tr>
         </table>
@@ -229,7 +229,7 @@ def send_password_reset_email(email: str, new_password: str):
 
 def send_password_reset_with_otp(email: str, otp_code: str):
     """Send password reset email with OTP code"""
-    subject = "Password Reset - Halimatu"
+    subject = "Password Reset - HALĪMATU SA'DIYYAH ISlamic Academy"
     current_year = datetime.now().year
 
     body = f"""
@@ -246,9 +246,9 @@ def send_password_reset_with_otp(email: str, otp_code: str):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -291,8 +291,8 @@ def send_password_reset_with_otp(email: str, otp_code: str):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>This is an automated message, please do not reply.</div>
                 </td>
             </tr>
         </table>
@@ -324,7 +324,7 @@ def send_password_reset_with_otp(email: str, otp_code: str):
 
 def send_new_password_email(email: str, new_password: str, user_name: str = "User"):
     """Send new password email with the latest format"""
-    subject = "Your Password Has Been Reset - Halimatu"
+    subject = "Your Password Has Been Reset - HALĪMATU SA'DIYYAH ISlamic Academy"
     current_year = datetime.now().year
 
     body = f"""
@@ -333,7 +333,7 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Password Reset - Halimatu</title>
+        <title>Password Reset - {settings.app_name}</title>
     </head>
     <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
@@ -341,9 +341,9 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -387,7 +387,7 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="https://halimatu.farmsglobal.org/login" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Login to Your Account →</a>
+                                <a href="{settings.app_url}/login" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Login to Your Account →</a>
                             </td>
                         </tr>
                     </table>
@@ -397,8 +397,8 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>This is an automated message, please do not reply.</div>
                 </td>
             </tr>
         </table>
@@ -438,7 +438,7 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Tutor Request Received - Halimatu</title>
+        <title>Tutor Request Received - {settings.app_name}</title>
     </head>
     <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
@@ -446,9 +446,9 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -485,7 +485,7 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
                         <tr>
                             <td style="text-align:center; color:#166534; font-size:14px;">
                                 💡 <strong>Need immediate assistance?</strong><br>
-                                Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a> or call +234 XXX XXX XXXX
+                                Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a> or call +234 XXX XXX XXXX
                             </td>
                         </tr>
                     </table>
@@ -493,7 +493,7 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="https://halimatu.farmsglobal.org" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                                <a href="{settings.app_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
                             </td>
                         </tr>
                     </table>
@@ -503,8 +503,8 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>This is an automated message, please do not reply.</div>
                 </td>
             </tr>
         </table>
@@ -512,7 +512,7 @@ def send_tutor_request_confirmation(email: str, user_name: str, subject: str):
     </html>
     """
     
-    send_email(email, "Your Tutor Request Has Been Received - Halimatu", body)
+    send_email(email, f"Your Tutor Request Has Been Received - {settings.app_name}", body)
 
 def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
     """Send notification email to admin about new tutor request"""
@@ -524,7 +524,7 @@ def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Tutor Request - Halimatu</title>
+        <title>New Tutor Request - {settings.app_name}</title>
     </head>
     <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
@@ -532,9 +532,9 @@ def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -566,7 +566,7 @@ def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="https://halimatu.farmsglobal.org/admin/tutor-requests" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Requests →</a>
+                                <a href="{settings.app_url}/admin/tutor-requests" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Requests →</a>
                             </td>
                         </tr>
                     </table>
@@ -576,7 +576,7 @@ def send_tutor_request_admin_notification(admin_email: str, request_data: dict):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280;">© {current_year} Halimatu. All rights reserved.</div>
+                    <div style="font-size:12px; color:#6b7280;">© {current_year} {settings.app_name}. All rights reserved.</div>
                 </td>
             </tr>
         </table>
@@ -596,7 +596,7 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Thank You - Halimatu</title>
+        <title>Thank You - {settings.app_name}</title>
     </head>
     <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
@@ -604,9 +604,9 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -643,7 +643,7 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
                         <tr>
                             <td style="text-align:center; color:#166534; font-size:14px;">
                                 💡 <strong>Need immediate assistance?</strong><br>
-                                Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a>
+                                Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a>
                             </td>
                         </tr>
                     </table>
@@ -651,7 +651,7 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="https://halimatu.farmsglobal.org" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
+                                <a href="{settings.app_url}" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">Visit Our Website →</a>
                             </td>
                         </tr>
                     </table>
@@ -661,8 +661,8 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu.com" style="color:#004aad;">support@halimatu.com</a></div>
-                    <div style="font-size:11px; color:#9ca3af;">© {current_year} Halimatu. All rights reserved.<br>This is an automated message, please do not reply.</div>
+                    <div style="font-size:12px; color:#6b7280; margin-bottom:15px;">Need help? Contact us at <a href="mailto:support@halimatu-sadiyyah.com.ng" style="color:#004aad;">support@halimatu-sadiyyah.com.ng</a></div>
+                    <div style="font-size:11px; color:#9ca3af;">© {current_year} {settings.app_name}. All rights reserved.<br>This is an automated message, please do not reply.</div>
                 </td>
             </tr>
         </table>
@@ -670,7 +670,7 @@ def send_contact_confirmation(email: str, user_name: str, subject: str):
     </html>
     """
     
-    send_email(email, "Thank You for Contacting Halimatu", body)
+    send_email(email, f"Thank You for Contacting {settings.app_name}", body)
 
 def send_contact_admin_notification(admin_email: str, contact_data: dict):
     """Send notification email to admin about new contact message"""
@@ -682,7 +682,7 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>New Contact Message - Halimatu</title>
+        <title>New Contact Message - {settings.app_name}</title>
     </head>
     <body style="margin:0; padding:20px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height:1.6; color:#1a1a1a; background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%);">
         <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; margin:0 auto; background:#ffffff; border-radius:20px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.1);">
@@ -690,9 +690,9 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
             <tr>
                 <td style="background: linear-gradient(135deg, #004aad 0%, #2c3e8f 100%); padding:40px 20px; text-align:center;">
                     <img src="https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png" 
-                         alt="Halimatu" 
+                         alt="{settings.app_name}" 
                          style="max-width:70px; height:auto; background:white; border-radius:50%; padding:8px;">
-                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">Halimatu</div>
+                    <div style="color:white; font-size:22px; font-weight:bold; margin-top:10px;">{settings.app_name}</div>
                 </td>
             </tr>
             
@@ -723,7 +723,7 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
                     <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:30px;">
                         <tr>
                             <td style="text-align:center;">
-                                <a href="https://halimatu.farmsglobal.org/admin/contact-messages" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Messages →</a>
+                                <a href="{settings.app_url}/admin/contact-messages" style="display:inline-block; background:#004aad; color:white; text-decoration:none; padding:12px 30px; border-radius:8px; font-weight:600;">View All Messages →</a>
                             </td>
                         </tr>
                     </table>
@@ -733,7 +733,7 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
             <!-- Footer -->
             <tr>
                 <td style="background:#f9fafb; padding:25px; text-align:center; border-top:1px solid #e5e7eb;">
-                    <div style="font-size:12px; color:#6b7280;">© {current_year} Halimatu. All rights reserved.</div>
+                    <div style="font-size:12px; color:#6b7280;">© {current_year} {settings.app_name}. All rights reserved.</div>
                 </td>
             </tr>
         </table>

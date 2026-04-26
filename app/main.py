@@ -22,7 +22,7 @@ from app.utils.route_collector import RouteCollector
 logger = setup_logger()
 
 app = FastAPI(
-    title="Halimatu",
+    title="HALĪMATU SA'DIYYAH ISlamic Academy",
     version="1.0.0",
     description="Learning Management System"
 )
@@ -57,7 +57,7 @@ app.mount("/uploads", StaticFiles(directory=settings.storage_path), name="upload
 # Root endpoint
 @app.get("/")
 def root():
-    return {"message": "Welcome to Halimatu API"}
+    return {"message": "Welcome to HALĪMATU SA'DIYYAH ISlamic Academy API"}
 
 # Health check endpoint
 @app.get("/health")

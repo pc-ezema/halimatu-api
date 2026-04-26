@@ -565,7 +565,7 @@ def initiate_subscription(
                     "phonenumber": result["user"]["phone"]
                 },
                 "customizations": {
-                    "title": "Halimatu LMS",
+                    "title": "HALĪMATU SA'DIYYAH ISlamic Academy",
                     "description": f"Subscription to {result['plan']['name']} Plan",
                     "logo": "https://res.cloudinary.com/ddj0k8gdw/image/upload/v1769389099/Halimatu-Academy-Images/logo_3_1_bmduex.png"
                 },

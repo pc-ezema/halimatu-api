@@ -4,13 +4,13 @@ from functools import lru_cache
 from typing import Optional
 import os
 
-# 1. Define the base directory (the 'halimatu' folder)
+# 1. Define the base directory (the 'HALĪMATU SA'DIYYAH ISlamic Academy' folder)
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 ENV_FILE = BASE_DIR / ".env"
 
 class Settings(BaseSettings):
     # Application
-    app_name: str = "Halimatu"
+    app_name: str = "HALĪMATU SA'DIYYAH ISlamic Academy"
     debug: bool = False
     base_url: str
 

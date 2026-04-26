@@ -177,7 +177,7 @@ class NotificationService:
         """Send welcome notification to new users"""
         notification_data = {
             "user_id": user_id,
-            "title": "Welcome to Halimatu!",
+            "title": "Welcome to HALĪMATU SA'DIYYAH ISlamic Academy!",
             "message": f"Welcome {user_name}! We're excited to have you. Start exploring our courses today.",
             "type": NotificationType.SYSTEM,
             "action_url": "/user/courses",
