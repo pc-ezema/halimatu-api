@@ -1,7 +1,9 @@
 from datetime import datetime
 import smtplib
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from app.config.settings import settings
 
 def send_otp_email(email: str, otp_code: str):
@@ -108,26 +110,6 @@ def send_otp_email(email: str, otp_code: str):
                 </td>
             </tr>
         </table>
-        
-        <script>
-            (function() {{
-                var otpCode = document.querySelector('.otp-code');
-                if (otpCode) {{
-                    otpCode.style.cursor = 'pointer';
-                    otpCode.onclick = function() {{
-                        var text = this.innerText;
-                        navigator.clipboard.writeText(text).then(function() {{
-                            var instruction = document.querySelector('.copy-instruction');
-                            var originalText = instruction.innerHTML;
-                            instruction.innerHTML = '✓ Copied!';
-                            setTimeout(function() {{
-                                instruction.innerHTML = originalText;
-                            }}, 1500);
-                        }});
-                    }};
-                }}
-            }})();
-        </script>
     </body>
     </html>
     """
@@ -201,26 +183,6 @@ def send_password_reset_email(email: str, new_password: str):
                 </td>
             </tr>
         </table>
-        
-        <script>
-            (function() {{
-                var passwordCode = document.querySelector('.otp-code');
-                if (passwordCode) {{
-                    passwordCode.style.cursor = 'pointer';
-                    passwordCode.onclick = function() {{
-                        var text = this.innerText;
-                        navigator.clipboard.writeText(text).then(function() {{
-                            var instruction = document.querySelector('.copy-instruction');
-                            var originalText = instruction.innerHTML;
-                            instruction.innerHTML = '✓ Copied!';
-                            setTimeout(function() {{
-                                instruction.innerHTML = originalText;
-                            }}, 1500);
-                        }});
-                    }};
-                }}
-            }})();
-        </script>
     </body>
     </html>
     """
@@ -296,26 +258,6 @@ def send_password_reset_with_otp(email: str, otp_code: str):
                 </td>
             </tr>
         </table>
-        
-        <script>
-            (function() {{
-                var otpCode = document.querySelector('.otp-code');
-                if (otpCode) {{
-                    otpCode.style.cursor = 'pointer';
-                    otpCode.onclick = function() {{
-                        var text = this.innerText;
-                        navigator.clipboard.writeText(text).then(function() {{
-                            var instruction = document.querySelector('.copy-instruction');
-                            var originalText = instruction.innerHTML;
-                            instruction.innerHTML = '✓ Copied!';
-                            setTimeout(function() {{
-                                instruction.innerHTML = originalText;
-                            }}, 1500);
-                        }});
-                    }};
-                }}
-            }})();
-        </script>
     </body>
     </html>
     """
@@ -402,26 +344,6 @@ def send_new_password_email(email: str, new_password: str, user_name: str = "Use
                 </td>
             </tr>
         </table>
-        
-        <script>
-            (function() {{
-                var passwordElement = document.querySelector('.otp-code');
-                if (passwordElement) {{
-                    passwordElement.style.cursor = 'pointer';
-                    passwordElement.onclick = function() {{
-                        var text = this.innerText;
-                        navigator.clipboard.writeText(text).then(function() {{
-                            var instruction = document.querySelector('.copy-instruction');
-                            var originalText = instruction.innerHTML;
-                            instruction.innerHTML = '✓ Copied!';
-                            setTimeout(function() {{
-                                instruction.innerHTML = originalText;
-                            }}, 1500);
-                        }});
-                    }};
-                }}
-            }})();
-        </script>
     </body>
     </html>
     """
@@ -743,30 +665,82 @@ def send_contact_admin_notification(admin_email: str, contact_data: dict):
     
     send_email(admin_email, f"New Contact Message - {contact_data.get('subject', 'Contact')}", body)
 
-def send_email(to_email: str, subject: str, html_body: str):
-    """Generic sender"""
+def _resolve_sender():
+    """
+    Return (from_addr, login_user, domain) from settings.
+
+    Handles:
+      - 'noreply@halimatu-sadiyyah.com.ng'  (full address)
+      - 'noreply'                            (bare mailbox + domain from mail_from)
+      - '011a587122008d'                     (Mailtrap - no @ anywhere)
+    """
+    login = (settings.smtp_username or "").strip()
+    source = (settings.mail_from or "").strip()
+
+    if "@" in login:
+        from_addr = login
+    elif "@" in source:
+        domain = source.split("@", 1)[1]
+        from_addr = f"{login}@{domain}"
+    else:
+        # Last resort: use hostname from smtp_host
+        host = (settings.smtp_host or "").strip()
+        # strip "sandbox.smtp.mailtrap.io" -> "mailtrap.io"
+        parts = host.split(".")
+        fallback_domain = ".".join(parts[-2:]) if len(parts) >= 2 else "localhost"
+        from_addr = f"{login}@{fallback_domain}"
+
+    domain = from_addr.split("@", 1)[1]
+    return from_addr, login, domain
+
+def send_email(to_email: str, subject: str, html_body: str, text_body: str = None):
+    """Send a transactional email via the configured SMTP server."""
+    if not text_body:
+        text_body = (
+            f"{subject}\n\n"
+            f"Please view this email in an HTML-capable email client.\n"
+        )
+
+    from_addr, login_user, domain = _resolve_sender()
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg["Reply-To"] = from_addr
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain=domain)
+
+    msg.attach(MIMEText(text_body, "plain", "utf-8"))
+    msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+    context = ssl.create_default_context()
+    mode = (settings.smtp_encryption or "").lower().strip()
+
+    if mode == "ssl":
+        server = smtplib.SMTP_SSL(
+            settings.smtp_host, settings.smtp_port,
+            context=context, timeout=20,
+        )
+    elif mode == "tls":
+        server = smtplib.SMTP(
+            settings.smtp_host, settings.smtp_port, timeout=20,
+        )
+        server.ehlo()
+        server.starttls(context=context)
+        server.ehlo()
+    else:
+        raise ValueError(
+            f"Unsupported smtp_encryption={settings.smtp_encryption!r}. "
+            "Use 'ssl' (port 465) or 'tls' (port 587)."
+        )
+
     try:
-        msg = MIMEMultipart()
-        msg['From'] = settings.mail_from
-        msg['To'] = to_email
-        msg['Subject'] = subject
-        
-        msg.attach(MIMEText(html_body, 'html'))
-        
-        # Create SMTP connection
-        if settings.smtp_encryption.lower() == "tls":
-            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
-            server.starttls()
-        elif settings.smtp_encryption.lower() == "ssl":
-            server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port)
-        else:
-            server = smtplib.SMTP(settings.smtp_host, settings.smtp_port)
-        
-        server.login(settings.smtp_username, settings.smtp_password)
+        server.login(login_user, settings.smtp_password)
         server.send_message(msg)
-        server.quit()
-        
-        print(f"Email sent successfully to {to_email}")
-            
-    except Exception as e:
-        print(f"Failed to send email to {to_email}: {e}")
+        print(f"Email sent successfully to {to_email} (from={from_addr})")
+    finally:
+        try:
+            server.quit()
+        except Exception:
+            pass
