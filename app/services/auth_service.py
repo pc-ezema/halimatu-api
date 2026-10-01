@@ -115,59 +115,51 @@ def register_user(db: Session, user_data: dict) -> User:
     
     return user
 
-def login_user(db: Session, email: str, password: str, ip_address: str = None, background_tasks=None) -> Dict:
-    """Login user and return tokens - Auto-resend OTP if email not verified"""
+def login_user(db: Session, email: str, password: str, ip_address: str = None) -> Dict:
+    """Login user and return tokens. Returns {'status': 'unverified', 'otp_code': ...}
+    for the unverified-email case so the route can schedule the email."""
     user = db.query(User).filter(User.email == email).first()
-    
     if not user:
         raise ValueError("Invalid credentials")
-    
-    # Check if account is locked
+
     if user.is_account_locked():
         raise ValueError("Account is locked. Please try again later or reset your password")
-    
-    # Check if email is verified - If not, resend OTP automatically
-    if not user.email_verified_at:
-        # Generate new OTP
-        otp_code = generate_otp(db, user.id, "email_verification")
-        
-        # Send OTP via email if background_tasks is provided
-        if background_tasks:
-            from app.services.email_service import send_otp_email
-            background_tasks.add_task(send_otp_email, user.email, otp_code)
-        
-        raise ValueError("Email not verified. A new verification code has been sent to your email.")
-    
-    # Check if account is active
-    if user.status != UserStatusEnum.ACTIVE:
-        raise ValueError("Account is inactive. Please contact support")
-    
-    # Verify password
+
+    # ---- password check FIRST ----
     if not verify_password(password, user.hashed_password):
         user.failed_login_attempts += 1
         if user.failed_login_attempts >= settings.max_login_attempts:
-            user.locked_until = datetime.utcnow() + timedelta(minutes=settings.lockout_duration_minutes)
+            user.locked_until = datetime.utcnow() + timedelta(
+                minutes=settings.lockout_duration_minutes
+            )
         db.commit()
         raise ValueError("Invalid credentials")
-    
-    # Reset failed login attempts on success
+
+    # ---- now safe to touch verification state ----
+    if not user.email_verified_at:
+        otp_code = generate_otp(db, user.id, "email_verification")
+        return {"status": "unverified", "otp_code": otp_code, "user": user}
+
+    if user.status != UserStatusEnum.ACTIVE:
+        raise ValueError("Account is inactive. Please contact support")
+
+    # success path
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login = datetime.utcnow()
     user.last_ip = ip_address
-    
     db.commit()
-    
-    # Generate tokens
+
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(db, user.id)
-    
+
     return {
+        "status": "ok",
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer",
         "expires_in": settings.access_token_expire_minutes * 60,
-        "user": user
+        "user": user,
     }
 
 def refresh_access_token(db: Session, refresh_token: str) -> Dict:

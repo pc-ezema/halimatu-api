@@ -76,14 +76,27 @@ def verify_otp_endpoint(
 def login(
     request: Request,
     data: LoginRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
 ):
+    client_ip = request.client.host if request.client else None
+
     try:
-        client_ip = request.client.host if request.client else None
         result = login_user(db, data.email, data.password, client_ip)
-        return result
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+    if result["status"] == "unverified":
+        background_tasks.add_task(
+            send_otp_email, result["user"].email, result["otp_code"]
+        )
+
+        raise HTTPException(
+            status_code=403,
+            detail="Email not verified. A new verification code has been sent.",
+        )
+
+    return result;
 
 @router.post("/resend-otp", response_model=MessageResponse)
 @limiter.limit("2/minute")
