@@ -11,7 +11,7 @@ print("smtp_encryption:", repr(settings.smtp_encryption))
 print("========================")
 
 send_email(
-    to_email="promisezema111@gmail.com",      # ← put your own address here
+    to_email="promiseezema11@gmail.com",      # ← put your own address here
     subject="123456 is your verification code",
     html_body="<html><body><h2>Test</h2><p>Code: <b>123456</b></p></body></html>",
     text_body="Test\n\nCode: 123456\n",
